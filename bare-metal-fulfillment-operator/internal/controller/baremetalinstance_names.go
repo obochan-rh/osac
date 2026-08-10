@@ -48,4 +48,7 @@ var (
 
 	// BareMetalInstanceManagementFinalizer is the finalizer for management operations
 	BareMetalInstanceManagementFinalizer string = fmt.Sprintf("%s/baremetalinstance", shared.OsacPrefix)
+
+	// BareMetalInstanceNetworkingFinalizer is the finalizer for network attachment cleanup
+	BareMetalInstanceNetworkingFinalizer string = fmt.Sprintf("%s/baremetalinstance-networking", shared.OsacPrefix)
 )
