@@ -55,6 +55,7 @@ func (r *BareMetalInstanceReconciler) reconcileAutoCleanup(
 	// Phase 1: Delete auto-provisioned ExternalIPAttachments
 	attachmentList := &opv1alpha1.ExternalIPAttachmentList{}
 	if err := r.List(ctx, attachmentList,
+		client.InNamespace(bareMetalInstance.Namespace),
 		client.MatchingLabels{
 			autoProvisionedLabel: "true",
 			bmiUUIDLabel:         bmiUID,
@@ -88,6 +89,7 @@ func (r *BareMetalInstanceReconciler) reconcileAutoCleanup(
 	// Phase 2: Delete auto-provisioned ExternalIPs
 	eipList := &opv1alpha1.ExternalIPList{}
 	if err := r.List(ctx, eipList,
+		client.InNamespace(bareMetalInstance.Namespace),
 		client.MatchingLabels{
 			autoProvisionedLabel: "true",
 			bmiUUIDLabel:         bmiUID,
@@ -140,6 +142,7 @@ func (r *BareMetalInstanceReconciler) addCleanupFinalizerIfNeeded(
 	bmiUID := string(bareMetalInstance.UID)
 	eipList := &opv1alpha1.ExternalIPList{}
 	if err := r.List(ctx, eipList,
+		client.InNamespace(bareMetalInstance.Namespace),
 		client.MatchingLabels{
 			autoProvisionedLabel: "true",
 			bmiUUIDLabel:         bmiUID,

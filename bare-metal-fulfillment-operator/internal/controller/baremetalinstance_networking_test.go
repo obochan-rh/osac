@@ -258,6 +258,7 @@ var _ = Describe("BareMetalInstance Networking", func() {
 				// Reconcile multiple times to trigger and poll
 				for range 5 {
 					_, _ = reconciler.reconcileNetworking(ctx, bmi)
+					_ = k8sClient.Status().Update(ctx, bmi)
 					Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(bmi), bmi)).To(Succeed())
 				}
 

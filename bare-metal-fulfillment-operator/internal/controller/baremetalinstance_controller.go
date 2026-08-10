@@ -495,18 +495,19 @@ func (r *BareMetalInstanceReconciler) reconcileNetworkProvisionAndDiscovery(ctx 
 			log.Info("BareMetalInstance not ready: provision template not complete", "bareMetalInstance", bareMetalInstance.Name)
 			return ctrl.Result{}, nil
 		}
+	}
 
-		// IP discovery runs after provisioning completes — host has booted and received DHCP lease
-		if len(bareMetalInstance.Spec.NetworkAttachments) > 0 {
-			result, ipErr := r.reconcileIPDiscovery(ctx, bareMetalInstance)
-			if ipErr != nil {
-				bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseFailed
-				return result, ipErr
-			}
-			if !result.IsZero() {
-				bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseProgressing
-				return result, nil
-			}
+	// IP discovery runs after provisioning completes — host has booted and received DHCP lease.
+	// This is outside the provisioning branch so BMIs with noop templates still get IP discovery.
+	if len(bareMetalInstance.Spec.NetworkAttachments) > 0 {
+		result, ipErr := r.reconcileIPDiscovery(ctx, bareMetalInstance)
+		if ipErr != nil {
+			bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseFailed
+			return result, ipErr
+		}
+		if !result.IsZero() {
+			bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseProgressing
+			return result, nil
 		}
 	}
 

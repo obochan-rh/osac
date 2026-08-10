@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -111,7 +112,14 @@ func (r *BareMetalInstanceReconciler) reconcileIPDiscovery(
 			OnSuccess: func(status provisioning.ProvisionStatus) {
 				if r.AAPClient != nil {
 					if parseErr := r.applyIPDiscoveryResults(ctx, bareMetalInstance, status.JobID); parseErr != nil {
-						log.Error(parseErr, "Failed to parse IP discovery results, initializing empty statuses")
+						log.Error(parseErr, "Failed to parse IP discovery results")
+						bareMetalInstance.SetStatusCondition(
+							v1alpha1.HostConditionIPDiscoveryComplete,
+							metav1.ConditionFalse,
+							v1alpha1.HostConditionReasonTemplateFailed,
+							fmt.Sprintf("Failed to parse IP discovery artifacts: %v", parseErr),
+						)
+						return
 					}
 				}
 				r.initNetworkAttachmentStatuses(bareMetalInstance)
@@ -195,16 +203,22 @@ func (r *BareMetalInstanceReconciler) applyIPDiscoveryResults(
 		status.Primary = na.Primary
 
 		if lease, ok := leaseMap[na.SubnetRef]; ok {
-			status.IPAddress = lease.IPAddress
-			log.Info("Discovered IP for attachment",
-				"interface", na.Interface, "subnet", na.SubnetRef, "ip", lease.IPAddress)
+			if net.ParseIP(lease.IPAddress) == nil {
+				log.Info("Skipping invalid IP address from DHCP lease",
+					"interface", na.Interface, "subnet", na.SubnetRef, "ip", lease.IPAddress)
+			} else {
+				status.IPAddress = lease.IPAddress
+				log.Info("Discovered IP for attachment",
+					"interface", na.Interface, "subnet", na.SubnetRef, "ip", lease.IPAddress)
+			}
 		}
 	}
 
 	return nil
 }
 
-// initNetworkAttachmentStatuses ensures statuses exist for all attachments without overwriting
+// initNetworkAttachmentStatuses ensures statuses exist for all attachments and syncs
+// SubnetRef, Interface, and Primary from spec to status without overwriting
 // any IP addresses already populated by applyIPDiscoveryResults.
 func (r *BareMetalInstanceReconciler) initNetworkAttachmentStatuses(
 	bareMetalInstance *v1alpha1.BareMetalInstance,
@@ -213,12 +227,11 @@ func (r *BareMetalInstanceReconciler) initNetworkAttachmentStatuses(
 		if i >= len(bareMetalInstance.Status.NetworkAttachmentStatuses) {
 			bareMetalInstance.Status.NetworkAttachmentStatuses = append(
 				bareMetalInstance.Status.NetworkAttachmentStatuses,
-				v1alpha1.BareMetalNetworkAttachmentStatus{
-					SubnetRef: na.SubnetRef,
-					Interface: na.Interface,
-					Primary:   na.Primary,
-				},
+				v1alpha1.BareMetalNetworkAttachmentStatus{},
 			)
 		}
+		bareMetalInstance.Status.NetworkAttachmentStatuses[i].SubnetRef = na.SubnetRef
+		bareMetalInstance.Status.NetworkAttachmentStatuses[i].Interface = na.Interface
+		bareMetalInstance.Status.NetworkAttachmentStatuses[i].Primary = na.Primary
 	}
 }

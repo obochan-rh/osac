@@ -168,6 +168,12 @@ func (r *BareMetalInstanceReconciler) reconcileNetworkingDeletion(
 		&bareMetalInstance.Status.NetworkingJobs,
 		provisioning.DefaultMaxJobHistory, r.ProvisionPollIntervalDuration,
 	)
+	// Persist NetworkingJobs changes made by RunDeprovisioningLifecycle.
+	// The CRD has a status subresource, so r.Update does not write status fields.
+	if statusErr := r.Status().Update(ctx, bareMetalInstance); statusErr != nil {
+		return ctrl.Result{}, false, statusErr
+	}
+	// DeprovisionSkipped: no deprovision template configured — treat as done.
 	if !done && result.IsZero() && err == nil {
 		done = true
 	}
