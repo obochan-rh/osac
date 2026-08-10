@@ -167,13 +167,13 @@ func (r *BareMetalInstanceReconciler) applyIPDiscoveryResults(
 		return fmt.Errorf("failed to get job %s for IP discovery results: %w", jobID, err)
 	}
 
-	if job.Artifacts == "" {
+	if len(job.Artifacts) == 0 {
 		log.Info("No artifacts in IP discovery job")
 		return nil
 	}
 
 	var result DHCPLeaseResult
-	if err := json.Unmarshal([]byte(job.Artifacts), &result); err != nil {
+	if err := json.Unmarshal(job.Artifacts, &result); err != nil {
 		return fmt.Errorf("failed to parse IP discovery artifacts: %w", err)
 	}
 

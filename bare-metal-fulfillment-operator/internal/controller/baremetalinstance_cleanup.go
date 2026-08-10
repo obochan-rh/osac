@@ -125,3 +125,34 @@ func (r *BareMetalInstanceReconciler) reconcileAutoCleanup(
 	log.Info("Auto-cleanup completed")
 	return ctrl.Result{}, true, nil
 }
+
+// addCleanupFinalizerIfNeeded adds the cleanup finalizer when auto-provisioned
+// ExternalIP resources exist for this BMI. Called during reconcileManagement to
+// ensure the finalizer is present before deletion can occur.
+func (r *BareMetalInstanceReconciler) addCleanupFinalizerIfNeeded(
+	ctx context.Context,
+	bareMetalInstance *v1alpha1.BareMetalInstance,
+) error {
+	if controllerutil.ContainsFinalizer(bareMetalInstance, BareMetalInstanceCleanupFinalizer) {
+		return nil
+	}
+
+	bmiUID := string(bareMetalInstance.UID)
+	eipList := &opv1alpha1.ExternalIPList{}
+	if err := r.List(ctx, eipList,
+		client.MatchingLabels{
+			autoProvisionedLabel: "true",
+			bmiUUIDLabel:         bmiUID,
+		},
+		client.Limit(1),
+	); err != nil {
+		return err
+	}
+
+	if len(eipList.Items) > 0 {
+		if controllerutil.AddFinalizer(bareMetalInstance, BareMetalInstanceCleanupFinalizer) {
+			return r.Update(ctx, bareMetalInstance)
+		}
+	}
+	return nil
+}

@@ -327,6 +327,11 @@ func (r *BareMetalInstanceReconciler) reconcileManagement(ctx context.Context, b
 		return ctrl.Result{}, nil
 	}
 
+	// Add cleanup finalizer if auto-provisioned ExternalIP resources exist for this BMI
+	if err := r.addCleanupFinalizerIfNeeded(ctx, bareMetalInstance); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	if result, err := r.reconcileNetworkProvisionAndDiscovery(ctx, bareMetalInstance); err != nil || !result.IsZero() {
 		return result, err
 	}
