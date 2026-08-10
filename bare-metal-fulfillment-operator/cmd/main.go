@@ -260,8 +260,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create shared provisioning provider
+	// Create shared provisioning provider and networking provider
 	var provisioningProvider provisioning.ProvisioningProvider
+	var networkingProvider provisioning.ProvisioningProvider
 	aapURL := helpers.GetEnvWithDefault(envAAPURL, "")
 	aapToken := helpers.GetEnvWithDefault(envAAPToken, "")
 	if aapURL != "" && aapToken != "" {
@@ -280,6 +281,12 @@ func main() {
 			os.Exit(1)
 		}
 
+		networkingProvider = provisioning.NewAAPProvider(
+			aapClient,
+			templatePrefix+"-create-network-attachment",
+			templatePrefix+"-delete-network-attachment",
+		)
+
 		setupLog.Info("AAP provisioning provider configured")
 	} else {
 		setupLog.Info("AAP not configured, provisioning workflows disabled")
@@ -290,7 +297,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := setupBareMetalInstanceController(ctx, mgr, provisioningProvider); err != nil {
+	if err := setupBareMetalInstanceController(ctx, mgr, provisioningProvider, networkingProvider); err != nil {
 		setupLog.Error(err, "unable to setup controller", "controller", "BareMetalInstance")
 		os.Exit(1)
 	}
@@ -395,6 +402,7 @@ func setupBareMetalInstanceController(
 	ctx context.Context,
 	mgr ctrl.Manager,
 	provisioningProvider provisioning.ProvisioningProvider,
+	networkingProvider provisioning.ProvisioningProvider,
 ) error {
 	// Read and parse inventory configuration
 	inventoryConfigPath := helpers.GetEnvWithDefault(envInventoryConfigPath, "/etc/osac/inventory/inventory.yaml")
@@ -464,6 +472,7 @@ func setupBareMetalInstanceController(
 		inventoryClient,
 		managementClient,
 		provisioningProvider,
+		networkingProvider,
 		noFreeHostsPollInterval,
 		tryLockFailPollInterval,
 		managementRecheckInterval,

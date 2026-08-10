@@ -48,11 +48,15 @@ type BareMetalInstanceReconciler struct {
 	InventoryClient                   inventory.Client
 	ManagementClient                  management.Client
 	ProvisioningProvider              provisioning.ProvisioningProvider
+	NetworkingProvider                provisioning.ProvisioningProvider
 	NoFreeHostsPollIntervalDuration   time.Duration
 	TryLockFailPollIntervalDuration   time.Duration
 	ManagementRecheckIntervalDuration time.Duration
 	ProvisionPollIntervalDuration     time.Duration
 }
+
+// +kubebuilder:rbac:groups=osac.openshift.io,resources=subnets,verbs=get;list;watch
+// +kubebuilder:rbac:groups=osac.openshift.io,resources=networkclasses,verbs=get;list;watch
 
 func NewBareMetalInstanceReconciler(
 	client client.Client,
@@ -60,6 +64,7 @@ func NewBareMetalInstanceReconciler(
 	inventoryClient inventory.Client,
 	managementClient management.Client,
 	provisioningProvider provisioning.ProvisioningProvider,
+	networkingProvider provisioning.ProvisioningProvider,
 	noFreeHostsPollIntervalDuration time.Duration,
 	tryLockFailPollIntervalDuration time.Duration,
 	managementRecheckIntervalDuration time.Duration,
@@ -89,6 +94,7 @@ func NewBareMetalInstanceReconciler(
 		TryLockFailPollIntervalDuration:   tryLockFailPollIntervalDuration,
 		ManagementClient:                  managementClient,
 		ProvisioningProvider:              provisioningProvider,
+		NetworkingProvider:                networkingProvider,
 		ManagementRecheckIntervalDuration: managementRecheckIntervalDuration,
 		ProvisionPollIntervalDuration:     provisionPollIntervalDuration,
 	}
