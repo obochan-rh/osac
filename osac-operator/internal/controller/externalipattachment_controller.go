@@ -223,12 +223,21 @@ func (r *ExternalIPAttachmentReconciler) handleUpdate(ctx context.Context, attac
 	}
 
 	// Resolve target BareMetalInstance
-	_, result, err = r.resolveBaremetalInstance(ctx, attachment)
+	bmi, result, err := r.resolveBaremetalInstance(ctx, attachment)
 	if err != nil || result.RequeueAfter > 0 {
 		return result, err
 	}
 
-	needsUpdate := r.syncAnnotations(attachment, pool, externalIP, implementationStrategy, ci, co)
+	// BMI DNAT precondition: wait for primary IP to be discovered
+	if bmi != nil && bmi.PrimaryIPAddress() == "" {
+		log.Info("BareMetalInstance primary IP not yet discovered, requeueing",
+			"baremetalInstance", bmi.Name)
+		return ctrl.Result{RequeueAfter: defaultPreconditionRequeueInterval}, nil
+	}
+
+	needsUpdate := r.syncAnnotations(
+		attachment, pool, externalIP, implementationStrategy, ci, co, bmi,
+	)
 	if needsUpdate {
 		if err := r.Update(ctx, attachment); err != nil {
 			return ctrl.Result{}, err
@@ -270,6 +279,7 @@ func (r *ExternalIPAttachmentReconciler) syncAnnotations(
 	implementationStrategy string,
 	ci *v1alpha1.ComputeInstance,
 	co *v1alpha1.ClusterOrder,
+	bmi *bmfov1alpha1.BareMetalInstance,
 ) bool {
 	if attachment.Annotations == nil {
 		attachment.Annotations = make(map[string]string)
@@ -297,6 +307,13 @@ func (r *ExternalIPAttachmentReconciler) syncAnnotations(
 	}
 	if co != nil {
 		targetIP := r.resolveClusterEndpoint(co, attachment)
+		if targetIP != "" && attachment.Annotations[osacExternalIPTargetIPAnnotation] != targetIP {
+			attachment.Annotations[osacExternalIPTargetIPAnnotation] = targetIP
+			needsUpdate = true
+		}
+	}
+	if bmi != nil {
+		targetIP := bmi.PrimaryIPAddress()
 		if targetIP != "" && attachment.Annotations[osacExternalIPTargetIPAnnotation] != targetIP {
 			attachment.Annotations[osacExternalIPTargetIPAnnotation] = targetIP
 			needsUpdate = true

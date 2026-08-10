@@ -274,6 +274,21 @@ type BareMetalInstanceStatus struct {
 	NetworkAttachmentStatuses []BareMetalNetworkAttachmentStatus `json:"networkAttachmentStatuses,omitempty"`
 }
 
+// PrimaryIPAddress returns the IP address of the primary network attachment,
+// or empty string if not yet discovered.
+func (h *BareMetalInstance) PrimaryIPAddress() string {
+	for _, nas := range h.Status.NetworkAttachmentStatuses {
+		if nas.Primary && nas.IPAddress != "" {
+			return nas.IPAddress
+		}
+	}
+	// Single attachment is implicitly primary
+	if len(h.Status.NetworkAttachmentStatuses) == 1 {
+		return h.Status.NetworkAttachmentStatuses[0].IPAddress
+	}
+	return ""
+}
+
 // GetPoolID returns the owning BareMetalPool UID if the BareMetalInstance is owned by a BareMetalPool.
 func (h *BareMetalInstance) GetPoolID() (string, bool) {
 	for _, ownerReference := range h.OwnerReferences {
