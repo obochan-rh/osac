@@ -51,4 +51,7 @@ var (
 
 	// BareMetalInstanceNetworkingFinalizer is the finalizer for network attachment cleanup
 	BareMetalInstanceNetworkingFinalizer string = fmt.Sprintf("%s/baremetalinstance-networking", shared.OsacPrefix)
+
+	// BareMetalInstanceCleanupFinalizer is the finalizer for auto-provisioned ExternalIP cleanup
+	BareMetalInstanceCleanupFinalizer string = fmt.Sprintf("%s/baremetalinstance-cleanup", shared.OsacPrefix)
 )

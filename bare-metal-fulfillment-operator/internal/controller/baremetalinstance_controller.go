@@ -757,8 +757,18 @@ func (r *BareMetalInstanceReconciler) handleDeletion(ctx context.Context, bareMe
 	log := logf.FromContext(ctx)
 	log.Info("Deleting BareMetalInstance")
 
+	// Auto-cleanup: delete auto-provisioned ExternalIP resources first
+	result, done, err := r.reconcileAutoCleanup(ctx, bareMetalInstance)
+	if err != nil {
+		return result, err
+	}
+	if !done {
+		bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseDeleting
+		return result, nil
+	}
+
 	// Network attachment cleanup runs before management cleanup
-	result, done, err := r.reconcileNetworkingDeletion(ctx, bareMetalInstance)
+	result, done, err = r.reconcileNetworkingDeletion(ctx, bareMetalInstance)
 	if err != nil {
 		return result, err
 	}
