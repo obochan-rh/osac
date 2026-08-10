@@ -134,5 +134,9 @@ func (b *kubeVirtBackend) Connect(ctx context.Context, target Target) (io.ReadWr
 	// end, eviction, or timeout).
 	StartPing(ctx, conn, wsLogger, b.pingConfig)
 
-	return websocket.NetConn(ctx, conn, websocket.MessageBinary), nil
+	msgType := websocket.MessageBinary
+	if target.ConsoleType == ConsoleTypeSerial {
+		msgType = websocket.MessageText
+	}
+	return websocket.NetConn(ctx, conn, msgType), nil
 }

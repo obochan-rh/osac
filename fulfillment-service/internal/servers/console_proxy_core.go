@@ -130,6 +130,7 @@ func (c *ConsoleProxyCore) ConnectBackend(ctx context.Context, ticket *console.T
 		ResourceType: console.ResourceTypeComputeInstance,
 		BackendURI:   ticket.TargetURI,
 		BackendToken: ticket.TargetToken,
+		ConsoleType:  ticket.ConsoleType,
 	}
 
 	result, err := c.manager.Connect(ctx, target, ticket.User, ticket.ClientID)

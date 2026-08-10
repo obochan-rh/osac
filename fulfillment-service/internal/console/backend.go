@@ -60,6 +60,7 @@ type Target struct {
 	ResourceType string
 	BackendURI   string // pre-computed wss:// URL from encrypted ticket
 	BackendToken string // bearer token from encrypted ticket
+	ConsoleType  string // "serial" or "vnc"
 }
 
 // LogValue implements slog.LogValuer. It omits BackendToken so that
@@ -68,5 +69,6 @@ func (t Target) LogValue() slog.Value {
 	return slog.GroupValue(
 		slog.String("resource_type", t.ResourceType),
 		slog.String("backend_uri", t.BackendURI),
+		slog.String("console_type", t.ConsoleType),
 	)
 }

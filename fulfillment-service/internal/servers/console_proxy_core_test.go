@@ -192,6 +192,7 @@ var _ = Describe("ConsoleProxyCore", func() {
 			ticket := &console.Ticket{
 				User:        "test-user",
 				ClientID:    "client-1",
+				ConsoleType: console.ConsoleTypeVNC,
 				TargetURI:   "wss://hub:6443/apis/console.osac.openshift.io/v1alpha1/namespaces/ns-1/computeinstances/ci-test/vnc",
 				TargetToken: "test-token",
 			}
@@ -206,6 +207,42 @@ var _ = Describe("ConsoleProxyCore", func() {
 			target := mockBackend.getLastTarget()
 			Expect(target.BackendURI).To(Equal(ticket.TargetURI))
 			Expect(target.BackendToken).To(Equal("test-token"))
+			Expect(target.ConsoleType).To(Equal(console.ConsoleTypeVNC))
+		})
+
+		It("should propagate serial console type to backend target", func() {
+			mockBackend := &mockBackendForServer{
+				conn: newMockConn("backend-data"),
+			}
+			manager, err := console.NewManager().
+				SetLogger(logger).
+				AddBackend("compute_instance", mockBackend).
+				Build()
+			Expect(err).NotTo(HaveOccurred())
+
+			core, err := NewConsoleProxyCore().
+				SetLogger(logger).
+				SetOpener(console.NewTicketOpener(nil)).
+				SetManager(manager).
+				Build()
+			Expect(err).NotTo(HaveOccurred())
+
+			ticket := &console.Ticket{
+				User:        "test-user",
+				ClientID:    "client-1",
+				ConsoleType: console.ConsoleTypeSerial,
+				TargetURI:   "wss://hub:6443/apis/console.osac.openshift.io/v1alpha1/namespaces/ns-1/computeinstances/ci-test/console",
+				TargetToken: "test-token",
+			}
+
+			conn, sessionCtx, err := core.ConnectBackend(context.Background(), ticket)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(conn).NotTo(BeNil())
+			Expect(sessionCtx).NotTo(BeNil())
+			conn.Close()
+
+			target := mockBackend.getLastTarget()
+			Expect(target.ConsoleType).To(Equal(console.ConsoleTypeSerial))
 		})
 
 		It("should propagate backend connection errors", func() {
