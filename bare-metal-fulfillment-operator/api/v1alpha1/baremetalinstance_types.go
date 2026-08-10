@@ -177,6 +177,9 @@ const (
 	// Set condition status True on success.
 	// Set condition status False with reason Progressing or TemplateFailed while not complete.
 	HostConditionDeprovisionTemplateComplete BareMetalInstanceConditionType = "DeprovisionTemplateComplete"
+
+	// HostConditionNetworkAttachmentsReady indicates all network attachments are provisioned.
+	HostConditionNetworkAttachmentsReady BareMetalInstanceConditionType = "NetworkAttachmentsReady"
 )
 
 // Host condition reason values
@@ -243,6 +246,9 @@ type BareMetalInstanceStatus struct {
 	// Limited to the last N jobs (configurable via OSAC_MAX_JOB_HISTORY, default 10)
 	// +kubebuilder:validation:Optional
 	ProvisioningJobs []opv1alpha1.JobStatus `json:"provisioningJobs,omitempty"`
+	// NetworkingJobs tracks the history of network attachment provisioning/deprovisioning.
+	// +kubebuilder:validation:Optional
+	NetworkingJobs []opv1alpha1.JobStatus `json:"networkingJobs,omitempty"`
 	// Conditions holds an array of metav1.Condition describing host state.
 	// +kubebuilder:validation:Optional
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
