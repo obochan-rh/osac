@@ -320,7 +320,27 @@ func (r *BareMetalInstanceReconciler) reconcileManagement(ctx context.Context, b
 		return ctrl.Result{}, nil
 	}
 
-	// Provisioning runs first — power reconciliation is suspended during provisioning
+	// Networking runs before provisioning — switch ports must be configured before OS boot
+	if len(bareMetalInstance.Spec.NetworkAttachments) > 0 {
+		result, netErr := r.reconcileNetworking(ctx, bareMetalInstance)
+		if netErr != nil {
+			bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseFailed
+			return result, netErr
+		}
+		if !result.IsZero() {
+			bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseProgressing
+			return result, nil
+		}
+
+		netCond := bareMetalInstance.GetStatusCondition(v1alpha1.HostConditionNetworkAttachmentsReady)
+		if netCond != nil && netCond.Status != metav1.ConditionTrue {
+			bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseFailed
+			log.Info("BareMetalInstance not ready: network attachments not ready", "bareMetalInstance", bareMetalInstance.Name)
+			return ctrl.Result{}, nil
+		}
+	}
+
+	// Provisioning runs after networking — power reconciliation is suspended during provisioning
 	if bareMetalInstance.Spec.TemplateID != "" && bareMetalInstance.Spec.TemplateID != shared.OsacNoopTemplate {
 		result, provErr := r.reconcileProvisioning(ctx, bareMetalInstance)
 		if provErr != nil {
@@ -706,6 +726,16 @@ func (r *BareMetalInstanceReconciler) triggerRestart(ctx context.Context, bareMe
 func (r *BareMetalInstanceReconciler) handleDeletion(ctx context.Context, bareMetalInstance *v1alpha1.BareMetalInstance) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 	log.Info("Deleting BareMetalInstance")
+
+	// Network attachment cleanup runs before management cleanup
+	result, done, err := r.reconcileNetworkingDeletion(ctx, bareMetalInstance)
+	if err != nil {
+		return result, err
+	}
+	if !done {
+		bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseDeleting
+		return result, nil
+	}
 
 	// Management cleanup
 	if controllerutil.ContainsFinalizer(bareMetalInstance, BareMetalInstanceManagementFinalizer) {
