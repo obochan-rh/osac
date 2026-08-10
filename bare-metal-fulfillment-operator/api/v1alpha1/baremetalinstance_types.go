@@ -180,6 +180,9 @@ const (
 
 	// HostConditionNetworkAttachmentsReady indicates all network attachments are provisioned.
 	HostConditionNetworkAttachmentsReady BareMetalInstanceConditionType = "NetworkAttachmentsReady"
+
+	// HostConditionIPDiscoveryComplete indicates DHCP lease discovery has completed.
+	HostConditionIPDiscoveryComplete BareMetalInstanceConditionType = "IPDiscoveryComplete"
 )
 
 // Host condition reason values
@@ -249,6 +252,9 @@ type BareMetalInstanceStatus struct {
 	// NetworkingJobs tracks the history of network attachment provisioning/deprovisioning.
 	// +kubebuilder:validation:Optional
 	NetworkingJobs []opv1alpha1.JobStatus `json:"networkingJobs,omitempty"`
+	// IPDiscoveryJobs tracks the history of DHCP lease discovery operations.
+	// +kubebuilder:validation:Optional
+	IPDiscoveryJobs []opv1alpha1.JobStatus `json:"ipDiscoveryJobs,omitempty"`
 	// Conditions holds an array of metav1.Condition describing host state.
 	// +kubebuilder:validation:Optional
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`

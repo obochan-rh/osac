@@ -260,16 +260,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create shared provisioning provider and networking provider
+	// Create shared provisioning, networking, and IP discovery providers
 	var provisioningProvider provisioning.ProvisioningProvider
 	var networkingProvider provisioning.ProvisioningProvider
+	var ipDiscoveryProvider provisioning.ProvisioningProvider
+	var aapClient *aap.Client
 	aapURL := helpers.GetEnvWithDefault(envAAPURL, "")
 	aapToken := helpers.GetEnvWithDefault(envAAPToken, "")
 	if aapURL != "" && aapToken != "" {
 		insecureSkipVerify := helpers.GetEnvWithDefault(envAAPInsecureSkipVerify, false)
 		templatePrefix := helpers.GetEnvWithDefault(envAAPTemplatePrefix, "osac")
 
-		aapClient := aap.NewClient(aapURL, aapToken, insecureSkipVerify)
+		aapClient = aap.NewClient(aapURL, aapToken, insecureSkipVerify)
 
 		var err error
 		provisioningProvider, err = provisioning.NewProvider(provisioning.ProviderConfig{
@@ -287,6 +289,12 @@ func main() {
 			templatePrefix+"-delete-network-attachment",
 		)
 
+		ipDiscoveryProvider = provisioning.NewAAPProvider(
+			aapClient,
+			templatePrefix+"-query-dhcp-lease",
+			"",
+		)
+
 		setupLog.Info("AAP provisioning provider configured")
 	} else {
 		setupLog.Info("AAP not configured, provisioning workflows disabled")
@@ -297,7 +305,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := setupBareMetalInstanceController(ctx, mgr, provisioningProvider, networkingProvider); err != nil {
+	if err := setupBareMetalInstanceController(
+		ctx, mgr, provisioningProvider, networkingProvider,
+		ipDiscoveryProvider, aapClient,
+	); err != nil {
 		setupLog.Error(err, "unable to setup controller", "controller", "BareMetalInstance")
 		os.Exit(1)
 	}
@@ -403,6 +414,8 @@ func setupBareMetalInstanceController(
 	mgr ctrl.Manager,
 	provisioningProvider provisioning.ProvisioningProvider,
 	networkingProvider provisioning.ProvisioningProvider,
+	ipDiscoveryProvider provisioning.ProvisioningProvider,
+	aapClient *aap.Client,
 ) error {
 	// Read and parse inventory configuration
 	inventoryConfigPath := helpers.GetEnvWithDefault(envInventoryConfigPath, "/etc/osac/inventory/inventory.yaml")
@@ -473,6 +486,8 @@ func setupBareMetalInstanceController(
 		managementClient,
 		provisioningProvider,
 		networkingProvider,
+		ipDiscoveryProvider,
+		aapClient,
 		noFreeHostsPollInterval,
 		tryLockFailPollInterval,
 		managementRecheckInterval,

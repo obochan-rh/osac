@@ -104,6 +104,7 @@ type Job struct {
 	Finished        time.Time `json:"finished"`
 	ExtraVars       string    `json:"extra_vars"` // AAP returns this as a JSON-encoded string
 	ResultTraceback string    `json:"result_traceback"`
+	Artifacts       string    `json:"artifacts"` // JSON-encoded job artifacts from set_stats
 }
 
 // TemplateType represents the type of AAP template.

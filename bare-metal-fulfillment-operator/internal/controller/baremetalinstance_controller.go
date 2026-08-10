@@ -38,6 +38,7 @@ import (
 	"github.com/osac-project/osac/bare-metal-fulfillment-operator/internal/management"
 	"github.com/osac-project/osac/bare-metal-fulfillment-operator/internal/shared"
 	opv1alpha1 "github.com/osac-project/osac/osac-operator/api/v1alpha1"
+	"github.com/osac-project/osac/osac-operator/pkg/aap"
 	"github.com/osac-project/osac/osac-operator/pkg/provisioning"
 )
 
@@ -49,6 +50,8 @@ type BareMetalInstanceReconciler struct {
 	ManagementClient                  management.Client
 	ProvisioningProvider              provisioning.ProvisioningProvider
 	NetworkingProvider                provisioning.ProvisioningProvider
+	IPDiscoveryProvider               provisioning.ProvisioningProvider
+	AAPClient                         *aap.Client
 	NoFreeHostsPollIntervalDuration   time.Duration
 	TryLockFailPollIntervalDuration   time.Duration
 	ManagementRecheckIntervalDuration time.Duration
@@ -65,6 +68,8 @@ func NewBareMetalInstanceReconciler(
 	managementClient management.Client,
 	provisioningProvider provisioning.ProvisioningProvider,
 	networkingProvider provisioning.ProvisioningProvider,
+	ipDiscoveryProvider provisioning.ProvisioningProvider,
+	aapClient *aap.Client,
 	noFreeHostsPollIntervalDuration time.Duration,
 	tryLockFailPollIntervalDuration time.Duration,
 	managementRecheckIntervalDuration time.Duration,
@@ -95,6 +100,8 @@ func NewBareMetalInstanceReconciler(
 		ManagementClient:                  managementClient,
 		ProvisioningProvider:              provisioningProvider,
 		NetworkingProvider:                networkingProvider,
+		IPDiscoveryProvider:               ipDiscoveryProvider,
+		AAPClient:                         aapClient,
 		ManagementRecheckIntervalDuration: managementRecheckIntervalDuration,
 		ProvisionPollIntervalDuration:     provisionPollIntervalDuration,
 	}
@@ -320,44 +327,8 @@ func (r *BareMetalInstanceReconciler) reconcileManagement(ctx context.Context, b
 		return ctrl.Result{}, nil
 	}
 
-	// Networking runs before provisioning — switch ports must be configured before OS boot
-	if len(bareMetalInstance.Spec.NetworkAttachments) > 0 {
-		result, netErr := r.reconcileNetworking(ctx, bareMetalInstance)
-		if netErr != nil {
-			bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseFailed
-			return result, netErr
-		}
-		if !result.IsZero() {
-			bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseProgressing
-			return result, nil
-		}
-
-		netCond := bareMetalInstance.GetStatusCondition(v1alpha1.HostConditionNetworkAttachmentsReady)
-		if netCond != nil && netCond.Status != metav1.ConditionTrue {
-			bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseFailed
-			log.Info("BareMetalInstance not ready: network attachments not ready", "bareMetalInstance", bareMetalInstance.Name)
-			return ctrl.Result{}, nil
-		}
-	}
-
-	// Provisioning runs after networking — power reconciliation is suspended during provisioning
-	if bareMetalInstance.Spec.TemplateID != "" && bareMetalInstance.Spec.TemplateID != shared.OsacNoopTemplate {
-		result, provErr := r.reconcileProvisioning(ctx, bareMetalInstance)
-		if provErr != nil {
-			bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseFailed
-			return result, provErr
-		}
-		if !result.IsZero() {
-			bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseProgressing
-			return result, nil
-		}
-
-		provisionCond := bareMetalInstance.GetStatusCondition(v1alpha1.HostConditionProvisionTemplateComplete)
-		if provisionCond != nil && provisionCond.Status != metav1.ConditionTrue {
-			bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseFailed
-			log.Info("BareMetalInstance not ready: provision template not complete", "bareMetalInstance", bareMetalInstance.Name)
-			return ctrl.Result{}, nil
-		}
+	if result, err := r.reconcileNetworkProvisionAndDiscovery(ctx, bareMetalInstance); err != nil || !result.IsZero() {
+		return result, err
 	}
 
 	// Capture whether power was synced before this reconciliation modifies conditions.
@@ -476,6 +447,65 @@ func (r *BareMetalInstanceReconciler) reconcilePower(ctx context.Context, bareMe
 	}
 
 	return true, nil
+}
+
+func (r *BareMetalInstanceReconciler) reconcileNetworkProvisionAndDiscovery(ctx context.Context, bareMetalInstance *v1alpha1.BareMetalInstance) (ctrl.Result, error) {
+	log := logf.FromContext(ctx)
+
+	// Networking runs before provisioning — switch ports must be configured before OS boot
+	if len(bareMetalInstance.Spec.NetworkAttachments) > 0 {
+		result, netErr := r.reconcileNetworking(ctx, bareMetalInstance)
+		if netErr != nil {
+			bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseFailed
+			return result, netErr
+		}
+		if !result.IsZero() {
+			bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseProgressing
+			return result, nil
+		}
+
+		netCond := bareMetalInstance.GetStatusCondition(v1alpha1.HostConditionNetworkAttachmentsReady)
+		if netCond != nil && netCond.Status != metav1.ConditionTrue {
+			bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseFailed
+			log.Info("BareMetalInstance not ready: network attachments not ready", "bareMetalInstance", bareMetalInstance.Name)
+			return ctrl.Result{}, nil
+		}
+	}
+
+	// Provisioning runs after networking — power reconciliation is suspended during provisioning
+	if bareMetalInstance.Spec.TemplateID != "" && bareMetalInstance.Spec.TemplateID != shared.OsacNoopTemplate {
+		result, provErr := r.reconcileProvisioning(ctx, bareMetalInstance)
+		if provErr != nil {
+			bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseFailed
+			return result, provErr
+		}
+		if !result.IsZero() {
+			bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseProgressing
+			return result, nil
+		}
+
+		provisionCond := bareMetalInstance.GetStatusCondition(v1alpha1.HostConditionProvisionTemplateComplete)
+		if provisionCond != nil && provisionCond.Status != metav1.ConditionTrue {
+			bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseFailed
+			log.Info("BareMetalInstance not ready: provision template not complete", "bareMetalInstance", bareMetalInstance.Name)
+			return ctrl.Result{}, nil
+		}
+
+		// IP discovery runs after provisioning completes — host has booted and received DHCP lease
+		if len(bareMetalInstance.Spec.NetworkAttachments) > 0 {
+			result, ipErr := r.reconcileIPDiscovery(ctx, bareMetalInstance)
+			if ipErr != nil {
+				bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseFailed
+				return result, ipErr
+			}
+			if !result.IsZero() {
+				bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseProgressing
+				return result, nil
+			}
+		}
+	}
+
+	return ctrl.Result{}, nil
 }
 
 func (r *BareMetalInstanceReconciler) reconcileProvisioning(ctx context.Context, bareMetalInstance *v1alpha1.BareMetalInstance) (ctrl.Result, error) {
