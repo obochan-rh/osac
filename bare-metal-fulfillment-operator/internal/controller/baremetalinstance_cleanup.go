@@ -31,8 +31,8 @@ import (
 )
 
 const (
-	autoProvisionedLabel = shared.OsacPrefix + "/auto-provisioned"
-	bmiUUIDLabel         = shared.OsacPrefix + "/baremetalinstance-uuid"
+	autoCreatedLabel    = shared.OsacPrefix + "/auto-created"
+	autoCreatedForLabel = shared.OsacPrefix + "/auto-created-for"
 )
 
 // reconcileAutoCleanup deletes auto-provisioned ExternalIPAttachment and ExternalIP
@@ -57,8 +57,8 @@ func (r *BareMetalInstanceReconciler) reconcileAutoCleanup(
 	if err := r.List(ctx, attachmentList,
 		client.InNamespace(bareMetalInstance.Namespace),
 		client.MatchingLabels{
-			autoProvisionedLabel: "true",
-			bmiUUIDLabel:         bmiUID,
+			autoCreatedLabel:    "true",
+			autoCreatedForLabel: bmiUID,
 		},
 	); err != nil {
 		return ctrl.Result{}, false,
@@ -91,8 +91,8 @@ func (r *BareMetalInstanceReconciler) reconcileAutoCleanup(
 	if err := r.List(ctx, eipList,
 		client.InNamespace(bareMetalInstance.Namespace),
 		client.MatchingLabels{
-			autoProvisionedLabel: "true",
-			bmiUUIDLabel:         bmiUID,
+			autoCreatedLabel:    "true",
+			autoCreatedForLabel: bmiUID,
 		},
 	); err != nil {
 		return ctrl.Result{}, false,
@@ -144,8 +144,8 @@ func (r *BareMetalInstanceReconciler) addCleanupFinalizerIfNeeded(
 	if err := r.List(ctx, eipList,
 		client.InNamespace(bareMetalInstance.Namespace),
 		client.MatchingLabels{
-			autoProvisionedLabel: "true",
-			bmiUUIDLabel:         bmiUID,
+			autoCreatedLabel:    "true",
+			autoCreatedForLabel: bmiUID,
 		},
 		client.Limit(1),
 	); err != nil {
