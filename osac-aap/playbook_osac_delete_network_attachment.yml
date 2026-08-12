@@ -1,0 +1,30 @@
+---
+- name: Delete network attachments for a BareMetalInstance
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    bmi: "{{ osac_job_vars.resource }}"
+    bmi_name: "{{ bmi.metadata.name }}"
+    host_name: "{{ bmi.spec.externalHostName | default(bmi.spec.externalHostID) }}"
+    network_attachments: "{{ bmi.spec.networkAttachments | default([]) }}"
+
+  pre_tasks:
+    - name: Show BMI metadata
+      ansible.builtin.debug:
+        var: bmi.metadata
+
+  tasks:
+    - name: Delete each network attachment
+      ansible.builtin.include_role:
+        name: osac.templates.netris
+        tasks_from: delete_network_attachment
+      vars:
+        network_attachment:
+          host_name: "{{ host_name }}"
+          logical_interface_name: "{{ item.interface }}"
+          subnet_ref: "{{ item.subnetRef }}"
+      loop: "{{ network_attachments }}"
+      loop_control:
+        label: "{{ item.interface | default('default') }} → {{ item.subnetRef }}"
+      when: network_attachments | length > 0

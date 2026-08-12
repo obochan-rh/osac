@@ -60,6 +60,8 @@ type BareMetalInstanceReconciler struct {
 
 // +kubebuilder:rbac:groups=osac.openshift.io,resources=subnets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=osac.openshift.io,resources=networkclasses,verbs=get;list;watch
+// +kubebuilder:rbac:groups=osac.openshift.io,resources=externalips,verbs=get;list;watch;delete
+// +kubebuilder:rbac:groups=osac.openshift.io,resources=externalipattachments,verbs=get;list;watch;delete
 
 func NewBareMetalInstanceReconciler(
 	client client.Client,
