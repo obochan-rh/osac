@@ -215,7 +215,7 @@
 
     - name: Fetch parking V-Net details (includes ports)
       ansible.builtin.uri:
-    force: true
+        force: true
         url: "{{ netris_controller_url }}/api/v2/vnet/{{ _parking_vnet_summary.id }}"
         method: GET
         headers:
@@ -247,7 +247,7 @@
 
     - name: Add port to parking V-Net
       ansible.builtin.uri:
-    force: true
+        force: true
         url: "{{ netris_controller_url }}/api/v2/vnet/{{ _parking_vnet.id }}"
         method: PUT
         headers:

@@ -224,7 +224,7 @@
     # but this is undocumented — send the full object to be safe.
     - name: Remove port from previous V-Net
       ansible.builtin.uri:
-    force: true
+        force: true
         url: "{{ netris_controller_url }}/api/v2/vnet/{{ _current_vnet.id }}"
         method: PUT
         headers:
