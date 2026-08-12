@@ -171,8 +171,7 @@ func newTestComputeInstanceSpec(templateID string) osacv1alpha1.ComputeInstanceS
 		Cores:     4,
 		MemoryGiB: 8,
 		BootDisk: osacv1alpha1.DiskSpec{
-			SizeGiB:     30,
-			StorageTier: "standard",
+			SizeGiB: 30,
 		},
 		RunStrategy: osacv1alpha1.RunStrategyAlways,
 	}

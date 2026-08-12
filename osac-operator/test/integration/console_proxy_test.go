@@ -190,7 +190,6 @@ spec:
   memoryGiB: 4
   bootDisk:
     sizeGiB: 20
-    storageTier: standard
   runStrategy: Always
 `, name, namespace)
 	return strings.NewReader(yaml)
