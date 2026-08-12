@@ -41,6 +41,7 @@
 
 - name: Get existing V-Nets
   ansible.builtin.uri:
+    force: true
     url: "{{ netris_controller_url }}/api/v2/vnet"
     method: GET
     headers:
@@ -68,6 +69,7 @@
 
 - name: Fetch target V-Net details (includes ports)
   ansible.builtin.uri:
+    force: true
     url: "{{ netris_controller_url }}/api/v2/vnet/{{ _target_vnet_summary.id }}"
     method: GET
     headers:
@@ -87,6 +89,7 @@
 
 - name: Get Netris inventory servers
   ansible.builtin.uri:
+    force: true
     url: "{{ netris_controller_url }}/api/v2/hw?type=server"
     method: GET
     headers:
@@ -119,6 +122,7 @@
 
 - name: Get server ports
   ansible.builtin.uri:
+    force: true
     url: "{{ netris_controller_url }}/api/v2/ports?switchID={{ _target_server.id }}"
     method: GET
     headers:
@@ -173,6 +177,7 @@
 
 - name: Remove port from V-Net
   ansible.builtin.uri:
+    force: true
     url: "{{ netris_controller_url }}/api/v2/vnet/{{ _target_vnet.id }}"
     method: PUT
     headers:
@@ -210,6 +215,7 @@
 
     - name: Fetch parking V-Net details (includes ports)
       ansible.builtin.uri:
+    force: true
         url: "{{ netris_controller_url }}/api/v2/vnet/{{ _parking_vnet_summary.id }}"
         method: GET
         headers:
@@ -241,6 +247,7 @@
 
     - name: Add port to parking V-Net
       ansible.builtin.uri:
+    force: true
         url: "{{ netris_controller_url }}/api/v2/vnet/{{ _parking_vnet.id }}"
         method: PUT
         headers:

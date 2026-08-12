@@ -41,6 +41,7 @@
 
 - name: Get Netris inventory servers
   ansible.builtin.uri:
+    force: true
     url: "{{ netris_controller_url }}/api/v2/hw?type=server"
     method: GET
     headers:
@@ -68,6 +69,7 @@
 
 - name: Get server ports
   ansible.builtin.uri:
+    force: true
     url: "{{ netris_controller_url }}/api/v2/ports?switchID={{ _dq_target_server.id }}"
     method: GET
     headers:
@@ -114,6 +116,7 @@
 
 - name: Get IPAM subnets from Netris
   ansible.builtin.uri:
+    force: true
     url: "{{ netris_controller_url }}/api/v2/ipam/subnets"
     method: GET
     headers:
@@ -140,6 +143,7 @@
 
 - name: Query IPAM hosts for subnet
   ansible.builtin.uri:
+    force: true
     url: "{{ netris_controller_url }}/api/v2/ipam/hosts/{{ _dq_ipam_subnet.id }}"
     method: GET
     headers:
