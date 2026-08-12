@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -27,7 +29,6 @@ import (
 
 	"github.com/osac-project/osac/bare-metal-fulfillment-operator/api/v1alpha1"
 	"github.com/osac-project/osac/bare-metal-fulfillment-operator/internal/shared"
-	opv1alpha1 "github.com/osac-project/osac/osac-operator/api/v1alpha1"
 )
 
 const (
@@ -35,9 +36,35 @@ const (
 	autoCreatedForLabel = shared.OsacPrefix + "/auto-created-for"
 )
 
-// reconcileAutoCleanup deletes auto-provisioned ExternalIPAttachment and ExternalIP
-// resources when a BareMetalInstance is deleted. Manually created resources are left
-// for the tenant. Deletion order: ExternalIPAttachment first, then ExternalIP.
+var (
+	externalIPAttachmentGVK = schema.GroupVersionKind{
+		Group: "osac.openshift.io", Version: "v1alpha1", Kind: "ExternalIPAttachment",
+	}
+	externalIPGVK = schema.GroupVersionKind{
+		Group: "osac.openshift.io", Version: "v1alpha1", Kind: "ExternalIP",
+	}
+)
+
+func listUnstructured(
+	ctx context.Context,
+	c client.Client,
+	gvk schema.GroupVersionKind,
+	namespace string,
+	labels map[string]string,
+	opts ...client.ListOption,
+) (*unstructured.UnstructuredList, error) {
+	list := &unstructured.UnstructuredList{}
+	list.SetGroupVersionKind(gvk)
+	allOpts := append([]client.ListOption{
+		client.InNamespace(namespace),
+		client.MatchingLabels(labels),
+	}, opts...)
+	if err := c.List(ctx, list, allOpts...); err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
 func (r *BareMetalInstanceReconciler) reconcileAutoCleanup(
 	ctx context.Context,
 	bareMetalInstance *v1alpha1.BareMetalInstance,
@@ -50,70 +77,76 @@ func (r *BareMetalInstanceReconciler) reconcileAutoCleanup(
 
 	log.Info("Running auto-cleanup for auto-provisioned resources")
 
-	bmiUID := string(bareMetalInstance.UID)
-
-	// Phase 1: Delete auto-provisioned ExternalIPAttachments
-	attachmentList := &opv1alpha1.ExternalIPAttachmentList{}
-	if err := r.List(ctx, attachmentList,
-		client.InNamespace(bareMetalInstance.Namespace),
-		client.MatchingLabels{
-			autoCreatedLabel:    "true",
-			autoCreatedForLabel: bmiUID,
-		},
-	); err != nil {
-		return ctrl.Result{}, false,
-			fmt.Errorf("failed to list ExternalIPAttachments: %w", err)
+	labels := map[string]string{
+		autoCreatedLabel:    "true",
+		autoCreatedForLabel: string(bareMetalInstance.UID),
 	}
 
-	for i := range attachmentList.Items {
-		att := &attachmentList.Items[i]
-		if att.DeletionTimestamp.IsZero() {
+	attachments, err := listUnstructured(
+		ctx, r.Client, externalIPAttachmentGVK,
+		bareMetalInstance.Namespace, labels,
+	)
+	if err != nil {
+		log.Info("Cannot list ExternalIPAttachments, removing cleanup finalizer",
+			"error", err)
+		controllerutil.RemoveFinalizer(bareMetalInstance, BareMetalInstanceCleanupFinalizer)
+		if updateErr := r.Update(ctx, bareMetalInstance); updateErr != nil {
+			return ctrl.Result{}, false, updateErr
+		}
+		return ctrl.Result{}, true, nil
+	}
+
+	for i := range attachments.Items {
+		att := &attachments.Items[i]
+		if att.GetDeletionTimestamp().IsZero() {
 			log.Info("Deleting auto-provisioned ExternalIPAttachment",
-				"name", att.Name)
+				"name", att.GetName())
 			if err := r.Delete(ctx, att); client.IgnoreNotFound(err) != nil {
 				return ctrl.Result{}, false,
 					fmt.Errorf("failed to delete ExternalIPAttachment %s: %w",
-						att.Name, err)
+						att.GetName(), err)
 			}
 		}
 	}
 
-	if len(attachmentList.Items) > 0 {
+	if len(attachments.Items) > 0 {
 		log.Info("Waiting for ExternalIPAttachment deletion to complete",
-			"remaining", len(attachmentList.Items))
+			"remaining", len(attachments.Items))
 		return ctrl.Result{
 			RequeueAfter: DefaultManagementRecheckIntervalDuration,
 		}, false, nil
 	}
 
-	// Phase 2: Delete auto-provisioned ExternalIPs
-	eipList := &opv1alpha1.ExternalIPList{}
-	if err := r.List(ctx, eipList,
-		client.InNamespace(bareMetalInstance.Namespace),
-		client.MatchingLabels{
-			autoCreatedLabel:    "true",
-			autoCreatedForLabel: bmiUID,
-		},
-	); err != nil {
-		return ctrl.Result{}, false,
-			fmt.Errorf("failed to list ExternalIPs: %w", err)
+	eips, err := listUnstructured(
+		ctx, r.Client, externalIPGVK,
+		bareMetalInstance.Namespace, labels,
+	)
+	if err != nil {
+		log.Info("Cannot list ExternalIPs, removing cleanup finalizer",
+			"error", err)
+		controllerutil.RemoveFinalizer(bareMetalInstance, BareMetalInstanceCleanupFinalizer)
+		if updateErr := r.Update(ctx, bareMetalInstance); updateErr != nil {
+			return ctrl.Result{}, false, updateErr
+		}
+		return ctrl.Result{}, true, nil
 	}
 
-	for i := range eipList.Items {
-		eip := &eipList.Items[i]
-		if eip.DeletionTimestamp.IsZero() {
-			log.Info("Deleting auto-provisioned ExternalIP", "name", eip.Name)
+	for i := range eips.Items {
+		eip := &eips.Items[i]
+		if eip.GetDeletionTimestamp().IsZero() {
+			log.Info("Deleting auto-provisioned ExternalIP",
+				"name", eip.GetName())
 			if err := r.Delete(ctx, eip); client.IgnoreNotFound(err) != nil {
 				return ctrl.Result{}, false,
 					fmt.Errorf("failed to delete ExternalIP %s: %w",
-						eip.Name, err)
+						eip.GetName(), err)
 			}
 		}
 	}
 
-	if len(eipList.Items) > 0 {
+	if len(eips.Items) > 0 {
 		log.Info("Waiting for ExternalIP deletion to complete",
-			"remaining", len(eipList.Items))
+			"remaining", len(eips.Items))
 		return ctrl.Result{
 			RequeueAfter: DefaultManagementRecheckIntervalDuration,
 		}, false, nil
@@ -128,9 +161,6 @@ func (r *BareMetalInstanceReconciler) reconcileAutoCleanup(
 	return ctrl.Result{}, true, nil
 }
 
-// addCleanupFinalizerIfNeeded adds the cleanup finalizer when auto-provisioned
-// ExternalIP resources exist for this BMI. Called during reconcileManagement to
-// ensure the finalizer is present before deletion can occur.
 func (r *BareMetalInstanceReconciler) addCleanupFinalizerIfNeeded(
 	ctx context.Context,
 	bareMetalInstance *v1alpha1.BareMetalInstance,
@@ -139,20 +169,23 @@ func (r *BareMetalInstanceReconciler) addCleanupFinalizerIfNeeded(
 		return nil
 	}
 
-	bmiUID := string(bareMetalInstance.UID)
-	eipList := &opv1alpha1.ExternalIPList{}
-	if err := r.List(ctx, eipList,
-		client.InNamespace(bareMetalInstance.Namespace),
-		client.MatchingLabels{
-			autoCreatedLabel:    "true",
-			autoCreatedForLabel: bmiUID,
-		},
-		client.Limit(1),
-	); err != nil {
-		return err
+	labels := map[string]string{
+		autoCreatedLabel:    "true",
+		autoCreatedForLabel: string(bareMetalInstance.UID),
 	}
 
-	if len(eipList.Items) > 0 {
+	eips, err := listUnstructured(
+		ctx, r.Client, externalIPGVK,
+		bareMetalInstance.Namespace, labels,
+		client.Limit(1),
+	)
+	if err != nil {
+		logf.FromContext(ctx).V(1).Info("Skipping cleanup finalizer check",
+			"error", err)
+		return nil
+	}
+
+	if len(eips.Items) > 0 {
 		if controllerutil.AddFinalizer(bareMetalInstance, BareMetalInstanceCleanupFinalizer) {
 			return r.Update(ctx, bareMetalInstance)
 		}
