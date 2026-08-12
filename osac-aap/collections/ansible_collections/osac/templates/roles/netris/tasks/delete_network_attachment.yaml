@@ -119,7 +119,7 @@
 
 - name: Get server ports
   ansible.builtin.uri:
-    url: "{{ netris_controller_url }}/api/v2/hw/ports?switchID={{ _target_server.id }}"
+    url: "{{ netris_controller_url }}/api/v2/ports?switchID={{ _target_server.id }}"
     method: GET
     headers:
       Cookie: "connect.sid={{ netris_session_cookie }}"
