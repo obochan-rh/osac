@@ -1,7 +1,6 @@
 ---
-# Query DHCP leases for a network attachment by resolving the server
-# port MAC from host_name + logical_interface_name, then matching it
-# against DHCP lease entries in the Netris IPAM.
+# Query DHCP leases for a network attachment by matching the server
+# name against IPAM host entries in the target subnet.
 #
 # Input: network_attachment dict with host_name, logical_interface_name,
 #        subnet_ref (same interface as create_network_attachment).
@@ -11,7 +10,6 @@
 - name: Extract network attachment configuration
   ansible.builtin.set_fact:
     _dq_host_name: "{{ network_attachment.host_name }}"
-    _dq_logical_interface: "{{ network_attachment.logical_interface_name }}"
     _dq_subnet_ref: "{{ network_attachment.subnet_ref }}"
 
 - name: Look up Subnet CR by UUID label
@@ -37,82 +35,13 @@
     name: netris.controller.auth
   when: netris_session_cookie is not defined
 
-# --- Resolve server port MAC ---
-
-- name: Get Netris inventory servers
-  ansible.builtin.uri:
-    force: true
-    url: "{{ netris_controller_url }}/api/v2/hw?type=server"
-    method: GET
-    headers:
-      Cookie: "connect.sid={{ netris_session_cookie }}"
-    return_content: true
-    status_code: 200
-    timeout: "{{ netris_timeout | default(30) }}"
-    validate_certs: "{{ netris_validate_certs | default(true) }}"
-  register: _dq_server_list_resp
-  no_log: true
-
-- name: Find server by host_name
-  ansible.builtin.set_fact:
-    _dq_target_server: >-
-      {{ (_dq_server_list_resp.json.data | default([]))
-         | selectattr('name', 'equalto', _dq_host_name)
-         | list | first | default(none) }}
-  when: _dq_server_list_resp.json is mapping
-
-- name: Fail if server not found
-  ansible.builtin.fail:
-    msg: >-
-      Server '{{ _dq_host_name }}' not found in Netris inventory.
-  when: _dq_target_server is not defined or _dq_target_server is none
-
-- name: Get server ports
-  ansible.builtin.uri:
-    force: true
-    url: "{{ netris_controller_url }}/api/v2/ports?switchID={{ _dq_target_server.id }}"
-    method: GET
-    headers:
-      Cookie: "connect.sid={{ netris_session_cookie }}"
-    return_content: true
-    status_code: 200
-    timeout: "{{ netris_timeout | default(30) }}"
-    validate_certs: "{{ netris_validate_certs | default(true) }}"
-  register: _dq_ports_resp
-  no_log: true
-
-- name: Extract ports list from response
-  ansible.builtin.set_fact:
-    _dq_server_ports: >-
-      {{ (_dq_ports_resp.json.data.data | default(_dq_ports_resp.json.data))
-         | default([]) }}
-
-- name: Find port matching interface name
-  ansible.builtin.set_fact:
-    _dq_target_port: >-
-      {{ _dq_server_ports
-         | selectattr('port', 'equalto', _dq_logical_interface)
-         | list | first | default(none) }}
-
-- name: Fail if port not found
-  ansible.builtin.fail:
-    msg: >-
-      Port '{{ _dq_logical_interface }}' not found on server '{{ _dq_host_name }}'.
-      Available ports: {{ _dq_server_ports | map(attribute='port') | list }}.
-  when: _dq_target_port is none
-
-- name: Extract port MAC address
-  ansible.builtin.set_fact:
-    _dq_port_mac: "{{ _dq_target_port.macAddress | default(_dq_target_port.mac_address, true) | lower }}"
-
 - name: Display DHCP lease query parameters
   ansible.builtin.debug:
     msg:
-      - "Querying DHCP lease for host '{{ _dq_host_name }}' interface '{{ _dq_logical_interface }}'"
-      - "Port MAC: {{ _dq_port_mac }}"
+      - "Querying DHCP lease for host '{{ _dq_host_name }}'"
       - "Subnet: {{ _dq_subnet_name }} (UUID: {{ _dq_subnet_ref }})"
 
-# --- Query DHCP leases ---
+# --- Find IPAM subnet ID ---
 
 - name: Get IPAM subnets from Netris
   ansible.builtin.uri:
@@ -141,6 +70,8 @@
       IPAM subnet '{{ _dq_subnet_name }}' not found in Netris controller.
   when: _dq_ipam_subnet is none
 
+# --- Match IPAM host by server name ---
+
 - name: Query IPAM hosts for subnet
   ansible.builtin.uri:
     force: true
@@ -155,33 +86,23 @@
   register: _dq_hosts_resp
   no_log: true
 
-- name: Initialize matched IP
+- name: Find IPAM host matching server name
   ansible.builtin.set_fact:
-    _dq_matched_ip: ""
-
-- name: Find host matching port MAC
-  ansible.builtin.set_fact:
-    _dq_matched_ip: "{{ item.address }}"
-  loop: "{{ _dq_hosts_resp.json.data | default([]) }}"
-  when:
-    - _dq_matched_ip | length == 0
-    - (item.mac | default([]))
-      | map(attribute='address')
-      | map('lower')
-      | select('equalto', _dq_port_mac)
-      | list | length > 0
-  loop_control:
-    label: "{{ item.address | default('unknown') }}"
-  no_log: true
+    _dq_matched_host: >-
+      {{ (_dq_hosts_resp.json.data | default([]))
+         | selectattr('name', 'equalto', _dq_host_name)
+         | list | first | default(none) }}
 
 - name: Set discovered IP address
   ansible.builtin.set_fact:
-    discovered_ip_address: "{{ _dq_matched_ip }}"
+    discovered_ip_address: >-
+      {{ (_dq_matched_host is not none and _dq_matched_host is mapping)
+         | ternary(_dq_matched_host.address | default(''), '') }}
 
 - name: Display DHCP lease query result
   ansible.builtin.debug:
     msg: >-
-      {{ (_dq_matched_ip | length > 0)
+      {{ (discovered_ip_address | length > 0)
          | ternary(
-             "DHCP lease found: MAC '" + _dq_port_mac + "' → IP '" + discovered_ip_address + "' in subnet '" + _dq_subnet_name + "'",
-             "No DHCP lease found yet for MAC '" + _dq_port_mac + "' in subnet '" + _dq_subnet_name + "'") }}
+             "DHCP lease found: host '" + _dq_host_name + "' → IP '" + discovered_ip_address + "' in subnet '" + _dq_subnet_name + "'",
+             "No DHCP lease found yet for host '" + _dq_host_name + "' in subnet '" + _dq_subnet_name + "'") }}
