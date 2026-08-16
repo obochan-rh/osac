@@ -99,6 +99,13 @@
       {{ (_dq_matched_host is not none and _dq_matched_host is mapping)
          | ternary(_dq_matched_host.address | default(''), '') }}
 
+- name: Fail if no DHCP lease found yet
+  ansible.builtin.fail:
+    msg: >-
+      No DHCP lease found for host '{{ _dq_host_name }}' in subnet '{{ _dq_subnet_name }}'.
+      The server may not have booted yet or DHCP has not assigned a lease.
+  when: discovered_ip_address | length == 0
+
 - name: Publish discovered IP as job artifact
   ansible.builtin.set_stats:
     data:
@@ -109,8 +116,4 @@
 
 - name: Display DHCP lease query result
   ansible.builtin.debug:
-    msg: >-
-      {{ (discovered_ip_address | length > 0)
-         | ternary(
-             "DHCP lease found: host '" + _dq_host_name + "' → IP '" + discovered_ip_address + "' in subnet '" + _dq_subnet_name + "'",
-             "No DHCP lease found yet for host '" + _dq_host_name + "' in subnet '" + _dq_subnet_name + "'") }}
+    msg: "DHCP lease found: host '{{ _dq_host_name }}' → IP '{{ discovered_ip_address }}' in subnet '{{ _dq_subnet_name }}'"
