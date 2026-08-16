@@ -12,8 +12,8 @@
          | default('netris', true) }}
     network_attachments: "{{ resource.spec.networkAttachments | default([]) }}"
     host_name: >-
-      {{ resource.spec.externalHostName
-         | default(resource.spec.externalHostID, true) }}
+      {{ (resource.spec.externalHostName
+         | default(resource.spec.externalHostID, true)).split('/')[-1] }}
 
   pre_tasks:
     - name: Show resource metadata
