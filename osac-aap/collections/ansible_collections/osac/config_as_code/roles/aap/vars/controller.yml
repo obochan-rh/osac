@@ -407,7 +407,7 @@ controller_templates: # noqa: var-naming[no-role-prefix]
     execution_environment: "{{ aap_prefix }}-ee"
     instance_groups:
       - "{{ aap_prefix }}-networking-operations-ig"
-    allow_simultaneous: true
+    allow_simultaneous: false
     ask_variables_on_launch: true
     verbosity: 0
   - name: "{{ aap_prefix }}-delete-network-attachment"
@@ -419,7 +419,7 @@ controller_templates: # noqa: var-naming[no-role-prefix]
     execution_environment: "{{ aap_prefix }}-ee"
     instance_groups:
       - "{{ aap_prefix }}-networking-operations-ig"
-    allow_simultaneous: true
+    allow_simultaneous: false
     ask_variables_on_launch: true
     verbosity: 0
   - name: "{{ aap_prefix }}-query-dhcp-lease"
@@ -431,7 +431,7 @@ controller_templates: # noqa: var-naming[no-role-prefix]
     execution_environment: "{{ aap_prefix }}-ee"
     instance_groups:
       - "{{ aap_prefix }}-networking-operations-ig"
-    allow_simultaneous: true
+    allow_simultaneous: false
     ask_variables_on_launch: true
     verbosity: 0
 
