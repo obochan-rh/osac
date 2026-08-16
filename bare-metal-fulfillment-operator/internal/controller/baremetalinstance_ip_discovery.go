@@ -78,12 +78,10 @@ func (r *BareMetalInstanceReconciler) reconcileIPDiscovery(
 		NetworkAttachments []v1alpha1.BareMetalNetworkAttachment
 		ExternalHostID     string
 		HostClass          string
-		ProvisionVersion   string
 	}{
 		bareMetalInstance.Spec.NetworkAttachments,
 		bareMetalInstance.Spec.ExternalHostID,
 		bareMetalInstance.Spec.HostClass,
-		bareMetalInstance.Status.DesiredConfigVersion,
 	})
 	if err != nil {
 		return ctrl.Result{}, err
