@@ -157,12 +157,17 @@ func (r *BareMetalInstanceReconciler) reconcileIPDiscovery(
 		return result, err
 	}
 
-	// If the job succeeded but no IPs were discovered, clear the successful
-	// job so the provisioning lifecycle re-triggers on the next reconcile.
+	// If the job succeeded but no IPs were discovered, mark the latest job's
+	// config version as stale so the provisioning lifecycle re-triggers exactly
+	// one new job on the next reconcile. Using a timestamp suffix ensures the
+	// version differs from the current desired version without clearing history.
 	ipCond := bareMetalInstance.GetStatusCondition(v1alpha1.HostConditionIPDiscoveryComplete)
 	if ipCond != nil && ipCond.Reason == "WaitingForLease" {
-		bareMetalInstance.Status.IPDiscoveryJobs = nil
-		log.Info("Clearing IP discovery jobs to retry after DHCP lease delay")
+		jobs := bareMetalInstance.Status.IPDiscoveryJobs
+		if len(jobs) > 0 {
+			jobs[len(jobs)-1].ConfigVersion = "retry-" + jobs[len(jobs)-1].ConfigVersion
+		}
+		log.Info("Marking IP discovery for retry after DHCP lease delay")
 		return ctrl.Result{RequeueAfter: r.ProvisionPollIntervalDuration}, nil
 	}
 
