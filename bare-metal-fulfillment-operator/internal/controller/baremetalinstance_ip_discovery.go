@@ -124,6 +124,17 @@ func (r *BareMetalInstanceReconciler) reconcileIPDiscovery(
 				}
 				r.initNetworkAttachmentStatuses(bareMetalInstance)
 
+				if r.AAPClient != nil && !r.hasDiscoveredIPs(bareMetalInstance) {
+					log.Info("DHCP lease not yet assigned, will retry")
+					bareMetalInstance.SetStatusCondition(
+						v1alpha1.HostConditionIPDiscoveryComplete,
+						metav1.ConditionFalse,
+						"WaitingForLease",
+						"DHCP lease not yet assigned, retrying",
+					)
+					return
+				}
+
 				bareMetalInstance.SetStatusCondition(
 					v1alpha1.HostConditionIPDiscoveryComplete,
 					metav1.ConditionTrue,
@@ -148,8 +159,16 @@ func (r *BareMetalInstanceReconciler) reconcileIPDiscovery(
 		return result, err
 	}
 
+	// If the job succeeded but no IPs were discovered, clear the successful
+	// job so the provisioning lifecycle re-triggers on the next reconcile.
+	ipCond := bareMetalInstance.GetStatusCondition(v1alpha1.HostConditionIPDiscoveryComplete)
+	if ipCond != nil && ipCond.Reason == "WaitingForLease" {
+		bareMetalInstance.Status.IPDiscoveryJobs = nil
+		log.Info("Clearing IP discovery jobs to retry after DHCP lease delay")
+		return ctrl.Result{RequeueAfter: r.ProvisionPollIntervalDuration}, nil
+	}
+
 	if result.RequeueAfter > 0 {
-		ipCond := bareMetalInstance.GetStatusCondition(v1alpha1.HostConditionIPDiscoveryComplete)
 		if ipCond == nil || ipCond.Reason != v1alpha1.HostConditionReasonTemplateFailed {
 			bareMetalInstance.SetStatusCondition(
 				v1alpha1.HostConditionIPDiscoveryComplete,
@@ -234,4 +253,15 @@ func (r *BareMetalInstanceReconciler) initNetworkAttachmentStatuses(
 		bareMetalInstance.Status.NetworkAttachmentStatuses[i].Interface = na.Interface
 		bareMetalInstance.Status.NetworkAttachmentStatuses[i].Primary = na.Primary
 	}
+}
+
+func (r *BareMetalInstanceReconciler) hasDiscoveredIPs(
+	bareMetalInstance *v1alpha1.BareMetalInstance,
+) bool {
+	for _, nas := range bareMetalInstance.Status.NetworkAttachmentStatuses {
+		if nas.IPAddress != "" {
+			return true
+		}
+	}
+	return false
 }

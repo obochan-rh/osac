@@ -99,6 +99,14 @@
       {{ (_dq_matched_host is not none and _dq_matched_host is mapping)
          | ternary(_dq_matched_host.address | default(''), '') }}
 
+- name: Publish discovered IP as job artifact
+  ansible.builtin.set_stats:
+    data:
+      leases:
+        - subnet_ref: "{{ _dq_subnet_ref }}"
+          ip_address: "{{ discovered_ip_address }}"
+          host_name: "{{ _dq_host_name }}"
+
 - name: Display DHCP lease query result
   ansible.builtin.debug:
     msg: >-
