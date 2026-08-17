@@ -146,7 +146,7 @@ func (r *BareMetalInstanceReconciler) reconcileIPDiscovery(
 		},
 		func() bool {
 			return provisioning.CheckAPIServerForNonTerminalProvisionJob(
-				ctx, r.Client, client.ObjectKeyFromObject(bareMetalInstance), &v1alpha1.BareMetalInstance{},
+				ctx, r.apiReaderOrClient(), client.ObjectKeyFromObject(bareMetalInstance), &v1alpha1.BareMetalInstance{},
 				func(obj client.Object) []opv1alpha1.JobStatus {
 					return obj.(*v1alpha1.BareMetalInstance).Status.IPDiscoveryJobs
 				},

@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/osac-project/osac/bare-metal-fulfillment-operator/api/v1alpha1"
@@ -1463,5 +1464,22 @@ var _ = Describe("BareMetalInstance Controller", func() {
 				})
 			})
 		})
+	})
+})
+
+var _ = Describe("BareMetalInstance duplicate-job guard reader", func() {
+	It("apiReaderOrClient returns the direct APIReader when set", func() {
+		apiReader := fake.NewClientBuilder().Build()
+		cached := fake.NewClientBuilder().Build()
+		r := &BareMetalInstanceReconciler{Client: cached, APIReader: apiReader}
+
+		Expect(r.apiReaderOrClient()).To(BeIdenticalTo(client.Reader(apiReader)))
+	})
+
+	It("apiReaderOrClient falls back to the client when APIReader is nil", func() {
+		cached := fake.NewClientBuilder().Build()
+		r := &BareMetalInstanceReconciler{Client: cached}
+
+		Expect(r.apiReaderOrClient()).To(BeIdenticalTo(client.Reader(cached)))
 	})
 })
