@@ -47,6 +47,8 @@
     method: GET
     headers:
       Cookie: "connect.sid={{ netris_session_cookie }}"
+      Cache-Control: "no-cache"
+      Pragma: "no-cache"
     return_content: true
     status_code: 200
     timeout: "{{ netris_timeout | default(30) }}"
@@ -76,6 +78,8 @@
     method: GET
     headers:
       Cookie: "connect.sid={{ netris_session_cookie }}"
+      Cache-Control: "no-cache"
+      Pragma: "no-cache"
     return_content: true
     status_code: 200
     timeout: "{{ netris_timeout | default(30) }}"
@@ -94,6 +98,8 @@
     method: GET
     headers:
       Cookie: "connect.sid={{ netris_session_cookie }}"
+      Cache-Control: "no-cache"
+      Pragma: "no-cache"
     return_content: true
     status_code: 200
     timeout: "{{ netris_timeout | default(30) }}"
@@ -123,6 +129,8 @@
     method: GET
     headers:
       Cookie: "connect.sid={{ netris_session_cookie }}"
+      Cache-Control: "no-cache"
+      Pragma: "no-cache"
     return_content: true
     status_code: 200
     timeout: "{{ netris_timeout | default(30) }}"
@@ -172,6 +180,8 @@
     method: GET
     headers:
       Cookie: "connect.sid={{ netris_session_cookie }}"
+      Cache-Control: "no-cache"
+      Pragma: "no-cache"
     return_content: true
     status_code: 200
     timeout: "{{ netris_timeout | default(30) }}"

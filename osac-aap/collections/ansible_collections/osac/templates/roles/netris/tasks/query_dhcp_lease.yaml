@@ -55,6 +55,8 @@
     method: GET
     headers:
       Cookie: "connect.sid={{ netris_session_cookie }}"
+      Cache-Control: "no-cache"
+      Pragma: "no-cache"
     return_content: true
     status_code: 200
     timeout: "{{ netris_timeout | default(30) }}"
@@ -84,6 +86,8 @@
     method: GET
     headers:
       Cookie: "connect.sid={{ netris_session_cookie }}"
+      Cache-Control: "no-cache"
+      Pragma: "no-cache"
     return_content: true
     status_code: 200
     timeout: "{{ netris_timeout | default(30) }}"
@@ -99,15 +103,28 @@
       {{ ((osac_job_vars.network_attachment_macs | default({}))[_dq_subnet_ref]
           | default('')) | lower }}
 
+# A Netris IPAM host's `mac` is a list of dicts
+# ([{address, source, state, ...}]), so match _dq_mac against the lowercased
+# mac[].address values rather than the list of dicts itself. Reset first so a
+# non-match does not leak a previous attachment's host across the playbook loop.
+- name: Reset matched IPAM host (MAC branch)
+  ansible.builtin.set_fact:
+    _dq_matched_host: "{{ none }}"
+  when: _dq_mac | length > 0
+
 - name: Find IPAM host matching MAC address
   ansible.builtin.set_fact:
-    _dq_matched_host: >-
-      {{ (_dq_hosts_resp.json.data | default([]))
-         | selectattr('mac', 'defined')
-         | selectattr('mac', 'truthy')
-         | selectattr('mac', 'contains', _dq_mac)
-         | list | first | default(none) }}
-  when: _dq_mac | length > 0
+    _dq_matched_host: "{{ item }}"
+  loop: >-
+    {{ (_dq_hosts_resp.json.data | default([]))
+       | selectattr('mac', 'defined')
+       | selectattr('mac', 'truthy')
+       | list }}
+  loop_control:
+    label: "{{ item.name | default('') }}"
+  when:
+    - _dq_mac | length > 0
+    - _dq_mac in (item.mac | map(attribute='address', default='') | map('lower') | list)
 
 - name: Find IPAM host matching server name
   ansible.builtin.set_fact:
