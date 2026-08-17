@@ -486,11 +486,21 @@ func (r *BareMetalInstanceReconciler) reconcileNetworkProvisionAndDiscovery(ctx 
 			return result, nil
 		}
 
+		// Provisioning must not start until network attachments are confirmed Ready:
+		// the host boots (and gets its DHCP lease on the tenant V-Net) only after the
+		// switch ports are attached. On early passes the condition is not yet set
+		// (e.g. right after the networking finalizer is added), so treat anything other
+		// than True as "not ready yet" and requeue — do NOT fall through to provisioning.
 		netCond := bareMetalInstance.GetStatusCondition(v1alpha1.HostConditionNetworkAttachmentsReady)
-		if netCond != nil && netCond.Status != metav1.ConditionTrue {
-			bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseFailed
-			log.Info("BareMetalInstance not ready: network attachments not ready", "bareMetalInstance", bareMetalInstance.Name)
-			return ctrl.Result{}, nil
+		if netCond == nil || netCond.Status != metav1.ConditionTrue {
+			if netCond != nil && netCond.Reason == v1alpha1.HostConditionReasonTemplateFailed {
+				bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseFailed
+				log.Info("BareMetalInstance not ready: network attachments failed", "bareMetalInstance", bareMetalInstance.Name)
+				return ctrl.Result{}, nil
+			}
+			bareMetalInstance.Status.Phase = v1alpha1.BareMetalInstancePhaseProgressing
+			log.Info("Waiting for network attachments to be ready before provisioning", "bareMetalInstance", bareMetalInstance.Name)
+			return ctrl.Result{RequeueAfter: r.ProvisionPollIntervalDuration}, nil
 		}
 	}
 

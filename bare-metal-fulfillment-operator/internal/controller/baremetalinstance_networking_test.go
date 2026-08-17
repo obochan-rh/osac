@@ -374,3 +374,64 @@ var _ = Describe("BareMetalInstance Networking", func() {
 		})
 	})
 })
+
+var _ = Describe("BareMetalInstance network/provision ordering", func() {
+	var (
+		ctx  context.Context
+		bmi  *v1alpha1.BareMetalInstance
+		prov *mockProvisioningProvider
+		net  *mockProvisioningProvider
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		bmi = &v1alpha1.BareMetalInstance{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: "test-bmi-order-",
+				Namespace:    "default",
+			},
+			Spec: v1alpha1.BareMetalInstanceSpec{
+				HostType:       "test-host",
+				ExternalHostID: "host-order-1",
+				HostClass:      "openstack",
+				// Non-noop template so the provisioning branch is active.
+				TemplateID: "bm_provision",
+				NetworkAttachments: []v1alpha1.BareMetalNetworkAttachment{
+					{SubnetRef: "subnet-1", Interface: "eth9", Primary: true},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, bmi)).To(Succeed())
+
+		net = &mockProvisioningProvider{}
+	})
+
+	AfterEach(func() {
+		Expect(k8sClient.Delete(ctx, bmi)).To(Succeed())
+	})
+
+	It("does not trigger provisioning until network attachments are Ready", func() {
+		provisionTriggered := false
+		prov = &mockProvisioningProvider{
+			triggerProvisionFunc: func(_ context.Context, _ client.Object) (*provisioning.ProvisionResult, error) {
+				provisionTriggered = true
+				return &provisioning.ProvisionResult{JobID: "prov-1", InitialState: opv1alpha1.JobStatePending}, nil
+			},
+		}
+		reconciler := &BareMetalInstanceReconciler{
+			Client:                        k8sClient,
+			Scheme:                        k8sClient.Scheme(),
+			NetworkingProvider:            net,
+			ProvisioningProvider:          prov,
+			ProvisionPollIntervalDuration: DefaultProvisionPollIntervalDuration,
+		}
+
+		// First pass adds the networking finalizer; NetworkAttachmentsReady is not yet
+		// True, so the sequencer must requeue without starting provisioning.
+		result, err := reconciler.reconcileNetworkProvisionAndDiscovery(ctx, bmi)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(provisionTriggered).To(BeFalse())
+		Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+		Expect(bmi.Status.Phase).To(Equal(v1alpha1.BareMetalInstancePhaseProgressing))
+	})
+})
