@@ -191,9 +191,19 @@ func (r *NATGatewayReconciler) handleUpdate(ctx context.Context, natgw *v1alpha1
 	if natgw.Annotations == nil {
 		natgw.Annotations = make(map[string]string)
 	}
+	annotationsChanged := false
 	if natgw.Annotations[osacImplementationStrategyAnnotation] != implementationStrategy {
 		natgw.Annotations[osacImplementationStrategyAnnotation] = implementationStrategy
 		log.Info("setting implementation-strategy annotation", "strategy", implementationStrategy)
+		annotationsChanged = true
+	}
+	// Pass the tenant VirtualNetwork name so the netris role creates the SNAT rule in
+	// the tenant VPC (VPC name == VirtualNetwork name), not the mgmt VPC.
+	if natgw.Annotations[osacVirtualNetworkNameAnnotation] != vnet.Name {
+		natgw.Annotations[osacVirtualNetworkNameAnnotation] = vnet.Name
+		annotationsChanged = true
+	}
+	if annotationsChanged {
 		if err := r.Update(ctx, natgw); err != nil {
 			return ctrl.Result{}, err
 		}
