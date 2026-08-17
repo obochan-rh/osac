@@ -1,16 +1,21 @@
 ---
-# Query DHCP leases for a network attachment by matching the server
-# name against IPAM host entries in the target subnet.
+# Query DHCP leases for a network attachment against IPAM host entries in
+# the target subnet. Bare-metal hosts are matched by NIC MAC address (they
+# are not registered as named fabric servers); named fabric servers (e.g.
+# CaaS agents) fall back to matching by server name.
 #
 # Input: network_attachment dict with host_name, logical_interface_name,
-#        subnet_ref (same interface as create_network_attachment).
-# Output: discovered_ip_address fact set to the matched IP, or
-#         discovered_ip_address="" if no lease found yet.
+#        subnet_ref (same interface as create_network_attachment). The
+#        subnet-ref → MAC map is supplied by the operator as
+#        osac_job_vars.network_attachment_macs.
+# Output: accumulates one entry per attachment into the _dhcp_leases fact,
+#         which the playbook publishes as the job's leases artifact.
 
 - name: Extract network attachment configuration
   ansible.builtin.set_fact:
     _dq_host_name: "{{ network_attachment.host_name }}"
     _dq_subnet_ref: "{{ network_attachment.subnet_ref }}"
+    _dq_interface: "{{ network_attachment.logical_interface_name | default('') }}"
 
 - name: Look up Subnet CR by UUID label
   kubernetes.core.k8s_info:
@@ -86,12 +91,31 @@
   register: _dq_hosts_resp
   no_log: true
 
+# The operator supplies the NIC MAC per subnet-ref. Netris stores lease MACs
+# lowercase (sourced from the DHCP request), so normalise for comparison.
+- name: Determine expected MAC for this attachment
+  ansible.builtin.set_fact:
+    _dq_mac: >-
+      {{ ((osac_job_vars.network_attachment_macs | default({}))[_dq_subnet_ref]
+          | default('')) | lower }}
+
+- name: Find IPAM host matching MAC address
+  ansible.builtin.set_fact:
+    _dq_matched_host: >-
+      {{ (_dq_hosts_resp.json.data | default([]))
+         | selectattr('mac', 'defined')
+         | selectattr('mac', 'truthy')
+         | selectattr('mac', 'contains', _dq_mac)
+         | list | first | default(none) }}
+  when: _dq_mac | length > 0
+
 - name: Find IPAM host matching server name
   ansible.builtin.set_fact:
     _dq_matched_host: >-
       {{ (_dq_hosts_resp.json.data | default([]))
          | selectattr('name', 'equalto', _dq_host_name)
          | list | first | default(none) }}
+  when: _dq_mac | length == 0
 
 - name: Set discovered IP address
   ansible.builtin.set_fact:
@@ -102,17 +126,24 @@
 - name: Fail if no DHCP lease found yet
   ansible.builtin.fail:
     msg: >-
-      No DHCP lease found for host '{{ _dq_host_name }}' in subnet '{{ _dq_subnet_name }}'.
+      No DHCP lease found for host '{{ _dq_host_name }}'
+      (interface '{{ _dq_interface }}', mac '{{ _dq_mac }}')
+      in subnet '{{ _dq_subnet_name }}'.
       The server may not have booted yet or DHCP has not assigned a lease.
   when: discovered_ip_address | length == 0
 
-- name: Publish discovered IP as job artifact
-  ansible.builtin.set_stats:
-    data:
-      leases:
-        - subnet_ref: "{{ _dq_subnet_ref }}"
-          ip_address: "{{ discovered_ip_address }}"
-          host_name: "{{ _dq_host_name }}"
+# Accumulate across the playbook's per-attachment loop; the playbook publishes
+# the aggregated list once as the job's leases artifact. Keys match the
+# operator's DHCPLease struct (subnet_ref, interface, ip_address, mac_address).
+- name: Accumulate discovered lease for this attachment
+  ansible.builtin.set_fact:
+    _dhcp_leases: >-
+      {{ (_dhcp_leases | default([])) + [{
+           'subnet_ref': _dq_subnet_ref,
+           'interface': _dq_interface,
+           'ip_address': discovered_ip_address,
+           'mac_address': _dq_mac,
+         }] }}
 
 - name: Display DHCP lease query result
   ansible.builtin.debug:

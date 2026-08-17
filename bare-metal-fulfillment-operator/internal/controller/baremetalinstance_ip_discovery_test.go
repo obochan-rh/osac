@@ -196,4 +196,57 @@ var _ = Describe("BareMetalInstance IP Discovery", func() {
 			})
 		})
 	})
+
+	Describe("buildSubnetMACMap", func() {
+		It("maps each attachment's subnet to the MAC of its interface", func() {
+			attachments := []v1alpha1.BareMetalNetworkAttachment{
+				{SubnetRef: "subnet-a", Interface: "eth9"},
+				{SubnetRef: "subnet-b", Interface: "eth0"},
+			}
+			ifaceMACs := map[string]string{
+				"eth9": "52:54:00:16:04:83",
+				"eth0": "52:54:00:AA:BB:CC",
+			}
+
+			Expect(buildSubnetMACMap(attachments, ifaceMACs)).To(Equal(map[string]string{
+				"subnet-a": "52:54:00:16:04:83",
+				"subnet-b": "52:54:00:AA:BB:CC",
+			}))
+		})
+
+		It("uses the single host interface when the attachment has no interface set", func() {
+			attachments := []v1alpha1.BareMetalNetworkAttachment{
+				{SubnetRef: "subnet-a"},
+			}
+			ifaceMACs := map[string]string{"eth9": "52:54:00:16:04:83"}
+
+			Expect(buildSubnetMACMap(attachments, ifaceMACs)).To(Equal(map[string]string{
+				"subnet-a": "52:54:00:16:04:83",
+			}))
+		})
+
+		It("omits attachments whose interface has no known MAC", func() {
+			attachments := []v1alpha1.BareMetalNetworkAttachment{
+				{SubnetRef: "subnet-a", Interface: "eth9"},
+				{SubnetRef: "subnet-b", Interface: "eth1"},
+			}
+			ifaceMACs := map[string]string{"eth9": "52:54:00:16:04:83"}
+
+			Expect(buildSubnetMACMap(attachments, ifaceMACs)).To(Equal(map[string]string{
+				"subnet-a": "52:54:00:16:04:83",
+			}))
+		})
+
+		It("does not guess when the attachment has no interface and the host has multiple", func() {
+			attachments := []v1alpha1.BareMetalNetworkAttachment{
+				{SubnetRef: "subnet-a"},
+			}
+			ifaceMACs := map[string]string{
+				"eth9": "52:54:00:16:04:83",
+				"eth0": "52:54:00:AA:BB:CC",
+			}
+
+			Expect(buildSubnetMACMap(attachments, ifaceMACs)).To(BeEmpty())
+		})
+	})
 })

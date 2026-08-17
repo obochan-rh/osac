@@ -67,10 +67,11 @@ func (m *mockInventoryClient) UnassignHost(ctx context.Context, inventoryHostID 
 
 // mockManagementClient implements management.Client for testing
 type mockManagementClient struct {
-	getPowerStateFunc     func(ctx context.Context, hostID string) (*management.PowerStatus, error)
-	setPowerStateFunc     func(ctx context.Context, hostID string, target management.PowerState) error
-	triggerRestartFunc    func(ctx context.Context, hostID string) error
-	isRestartCompleteFunc func(ctx context.Context, hostID string) (bool, error)
+	getPowerStateFunc        func(ctx context.Context, hostID string) (*management.PowerStatus, error)
+	setPowerStateFunc        func(ctx context.Context, hostID string, target management.PowerState) error
+	triggerRestartFunc       func(ctx context.Context, hostID string) error
+	isRestartCompleteFunc    func(ctx context.Context, hostID string) (bool, error)
+	getHostInterfaceMACsFunc func(ctx context.Context, hostID string) (map[string]string, error)
 }
 
 func (m *mockManagementClient) GetPowerState(ctx context.Context, hostID string) (*management.PowerStatus, error) {
@@ -99,6 +100,13 @@ func (m *mockManagementClient) IsRestartComplete(ctx context.Context, hostID str
 		return m.isRestartCompleteFunc(ctx, hostID)
 	}
 	return true, nil
+}
+
+func (m *mockManagementClient) GetHostInterfaceMACs(ctx context.Context, hostID string) (map[string]string, error) {
+	if m.getHostInterfaceMACsFunc != nil {
+		return m.getHostInterfaceMACsFunc(ctx, hostID)
+	}
+	return map[string]string{}, nil
 }
 
 // mockProvisioningProvider implements provisioning.ProvisioningProvider for testing

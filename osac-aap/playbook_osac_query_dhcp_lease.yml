@@ -38,3 +38,12 @@
       loop: "{{ network_attachments }}"
       loop_control:
         label: "{{ item.interface | default('default') }} → {{ item.subnetRef }}"
+
+  post_tasks:
+    # Emit once, after all attachments resolved, so multi-NIC leases aren't
+    # clobbered by per-iteration set_stats. Skipped if any attachment failed
+    # above (the job then fails and the operator retries with backoff).
+    - name: Publish discovered leases as job artifacts
+      ansible.builtin.set_stats:
+        data:
+          leases: "{{ _dhcp_leases | default([]) }}"
