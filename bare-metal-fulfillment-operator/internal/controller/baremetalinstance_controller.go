@@ -60,6 +60,10 @@ type BareMetalInstanceReconciler struct {
 	TryLockFailPollIntervalDuration   time.Duration
 	ManagementRecheckIntervalDuration time.Duration
 	ProvisionPollIntervalDuration     time.Duration
+	// BMParkingVNet is the Netris parking V-Net name that unassigned bare-metal
+	// fabric ports return to on deletion (empty = leave detached). Set from
+	// OSAC_BM_PARKING_VNET in cmd/main.go.
+	BMParkingVNet string
 }
 
 // +kubebuilder:rbac:groups=osac.openshift.io,resources=subnets,verbs=get;list;watch

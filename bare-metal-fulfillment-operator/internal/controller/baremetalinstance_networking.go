@@ -163,6 +163,12 @@ func (r *BareMetalInstanceReconciler) reconcileNetworkingDeletion(
 		bareMetalInstance.Status.NetworkingJobs = []opv1alpha1.JobStatus{}
 	}
 
+	// Return the fabric port to the parking V-Net (so an unassigned host keeps DHCP +
+	// a default gateway for the next inspection) instead of leaving it detached.
+	if r.BMParkingVNet != "" {
+		ctx = provisioning.WithBMParkingVNet(ctx, r.BMParkingVNet)
+	}
+
 	result, done, err := provisioning.RunDeprovisioningLifecycle(
 		ctx, r.NetworkingProvider, bareMetalInstance,
 		&bareMetalInstance.Status.NetworkingJobs,

@@ -81,6 +81,8 @@ const (
 	envAAPStatusPollInterval = "OSAC_AAP_STATUS_POLL_INTERVAL"
 	envAAPInsecureSkipVerify = "OSAC_AAP_INSECURE_SKIP_VERIFY"
 	envAAPTemplatePrefix     = "OSAC_AAP_TEMPLATE_PREFIX"
+
+	envBMParkingVNet = "OSAC_BM_PARKING_VNET"
 )
 
 func init() {
@@ -479,7 +481,7 @@ func setupBareMetalInstanceController(
 		func(v int) bool { return v > 0 },
 	)
 
-	if err := controller.NewBareMetalInstanceReconciler(
+	bareMetalInstanceReconciler := controller.NewBareMetalInstanceReconciler(
 		mgr.GetClient(),
 		mgr.GetScheme(),
 		inventoryClient,
@@ -492,7 +494,9 @@ func setupBareMetalInstanceController(
 		tryLockFailPollInterval,
 		managementRecheckInterval,
 		provisionPollInterval,
-	).SetupWithManager(mgr, maxConcurrentReconciles); err != nil {
+	)
+	bareMetalInstanceReconciler.BMParkingVNet = helpers.GetEnvWithDefault(envBMParkingVNet, "")
+	if err := bareMetalInstanceReconciler.SetupWithManager(mgr, maxConcurrentReconciles); err != nil {
 		return fmt.Errorf("baremetalinstance controller: %w", err)
 	}
 	return nil

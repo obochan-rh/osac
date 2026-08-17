@@ -30,6 +30,9 @@
           host_name: "{{ host_name }}"
           logical_interface_name: "{{ item.interface }}"
           subnet_ref: "{{ item.subnetRef }}"
+          # Return the port to the parking V-Net (bare metal) when the operator
+          # supplies one; empty leaves the port detached (default).
+          parking_vnet_name: "{{ osac_job_vars.bm_parking_vnet | default('') }}"
       loop: "{{ network_attachments }}"
       loop_control:
         label: "{{ item.interface | default('default') }} → {{ item.subnetRef }}"

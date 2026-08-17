@@ -30,6 +30,7 @@ const (
 	storageTierDefinitionsKey
 	storageBackendConnectionsKey
 	networkAttachmentMACsKey
+	bmParkingVNetKey
 )
 
 // TierDefinition is the flat, AAP-schema-shaped representation of a storage tier
@@ -126,4 +127,18 @@ func WithNetworkAttachmentMACs(ctx context.Context, macs map[string]string) cont
 func NetworkAttachmentMACsFromContext(ctx context.Context) map[string]string {
 	macs, _ := ctx.Value(networkAttachmentMACsKey).(map[string]string)
 	return macs
+}
+
+// WithBMParkingVNet returns a context carrying the bare-metal parking V-Net name. The
+// AAP provider reads this when building extra_vars so the delete_network_attachment
+// role returns the port to the parking V-Net instead of leaving it detached.
+func WithBMParkingVNet(ctx context.Context, name string) context.Context {
+	return context.WithValue(ctx, bmParkingVNetKey, name)
+}
+
+// BMParkingVNetFromContext retrieves the bare-metal parking V-Net name from the
+// context, or empty string if not set.
+func BMParkingVNetFromContext(ctx context.Context) string {
+	name, _ := ctx.Value(bmParkingVNetKey).(string)
+	return name
 }

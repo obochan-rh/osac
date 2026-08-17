@@ -366,6 +366,10 @@ func extractExtraVars(ctx context.Context, resource client.Object) (map[string]a
 		vars["network_attachment_macs"] = macs
 	}
 
+	if parking := BMParkingVNetFromContext(ctx); parking != "" {
+		vars["bm_parking_vnet"] = parking
+	}
+
 	return map[string]any{
 		"osac_job_vars": vars,
 	}, nil
