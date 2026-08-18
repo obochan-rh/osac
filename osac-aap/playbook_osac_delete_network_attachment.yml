@@ -11,6 +11,7 @@
          ['osac.openshift.io/implementation-strategy']
          | default('netris', true) }}
     network_attachments: "{{ resource.spec.networkAttachments | default([]) }}"
+    parking_vnet: "{{ osac_job_vars.bm_parking_vnet | default('', true) }}"
     host_name: >-
       {{ (resource.spec.externalHostName
          | default(resource.spec.externalHostID, true)).split('/')[-1] }}
@@ -21,7 +22,32 @@
         var: resource.metadata
 
   tasks:
-    - name: Delete each network attachment
+    - name: Resolve tenant V-Net name for each attachment
+      kubernetes.core.k8s_info:
+        api_version: osac.openshift.io/v1alpha1
+        kind: Subnet
+        label_selectors:
+          - "osac.openshift.io/subnet-uuid={{ item.subnetRef }}"
+      register: _subnet_lookups
+      loop: "{{ network_attachments }}"
+      loop_control:
+        label: "{{ item.subnetRef }}"
+      when: network_attachments | length > 0
+
+    - name: Build resolved attachment list (interface + tenant V-Net name)
+      ansible.builtin.set_fact:
+        _resolved_attachments: >-
+          {{ _resolved_attachments | default([]) + [{
+               'interface': item.item.interface,
+               'tenant_vnet_name': (item.resources[0].metadata.name
+                                    if (item.resources | length > 0) else '')
+             }] }}
+      loop: "{{ _subnet_lookups.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.subnetRef }}"
+      when: network_attachments | length > 0
+
+    - name: Detach each port from its tenant V-Net
       ansible.builtin.include_role:
         name: "osac.templates.{{ implementation_strategy }}"
         tasks_from: delete_network_attachment
@@ -29,11 +55,26 @@
         network_attachment:
           host_name: "{{ host_name }}"
           logical_interface_name: "{{ item.interface }}"
-          subnet_ref: "{{ item.subnetRef }}"
-          # Return the port to the parking V-Net (bare metal) when the operator
-          # supplies one; empty leaves the port detached (default).
-          parking_vnet_name: "{{ osac_job_vars.bm_parking_vnet | default('') }}"
-      loop: "{{ network_attachments }}"
+          target_vnet_name: "{{ item.tenant_vnet_name }}"
+      loop: "{{ _resolved_attachments | default([]) }}"
       loop_control:
-        label: "{{ item.interface | default('default') }} → {{ item.subnetRef }}"
-      when: network_attachments | length > 0
+        label: "{{ item.interface | default('default') }} ← {{ item.tenant_vnet_name }}"
+      when:
+        - _resolved_attachments is defined
+        - item.tenant_vnet_name | length > 0
+
+    - name: Attach each port to the parking V-Net
+      ansible.builtin.include_role:
+        name: "osac.templates.{{ implementation_strategy }}"
+        tasks_from: create_network_attachment
+      vars:
+        network_attachment:
+          host_name: "{{ host_name }}"
+          logical_interface_name: "{{ item.interface }}"
+          target_vnet_name: "{{ parking_vnet }}"
+      loop: "{{ _resolved_attachments | default([]) }}"
+      loop_control:
+        label: "{{ item.interface | default('default') }} → {{ parking_vnet }}"
+      when:
+        - _resolved_attachments is defined
+        - parking_vnet | length > 0
