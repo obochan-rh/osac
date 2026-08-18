@@ -435,3 +435,53 @@ var _ = Describe("BareMetalInstance network/provision ordering", func() {
 		Expect(bmi.Status.Phase).To(Equal(v1alpha1.BareMetalInstancePhaseProgressing))
 	})
 })
+
+var _ = Describe("BareMetalInstance networking parking plumbing", func() {
+	var ctx context.Context
+
+	BeforeEach(func() { ctx = context.Background() })
+
+	It("passes the parking V-Net name to the networking provider on provision", func() {
+		bmi := &v1alpha1.BareMetalInstance{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: "test-bmi-parking-",
+				Namespace:    "default",
+			},
+			Spec: v1alpha1.BareMetalInstanceSpec{
+				HostType:       "test-host",
+				ExternalHostID: "host-parking-1",
+				HostClass:      "openstack",
+				TemplateID:     "noop",
+				NetworkAttachments: []v1alpha1.BareMetalNetworkAttachment{
+					{SubnetRef: "subnet-1", Interface: "eth9", Primary: true},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, bmi)).To(Succeed())
+		defer func() { Expect(k8sClient.Delete(ctx, bmi)).To(Succeed()) }()
+
+		var seenParking string
+		mockProvider := &mockProvisioningProvider{
+			triggerProvisionFunc: func(c context.Context, _ client.Object) (*provisioning.ProvisionResult, error) {
+				seenParking = provisioning.BMParkingVNetFromContext(c)
+				return &provisioning.ProvisionResult{JobID: "net-1", InitialState: opv1alpha1.JobStatePending}, nil
+			},
+		}
+		reconciler := &BareMetalInstanceReconciler{
+			Client:                        k8sClient,
+			Scheme:                        k8sClient.Scheme(),
+			NetworkingProvider:            mockProvider,
+			ProvisionPollIntervalDuration: DefaultProvisionPollIntervalDuration,
+			BMParkingVNet:                 "bm-parking",
+		}
+
+		// First call adds the finalizer; second triggers the provider.
+		_, err := reconciler.reconcileNetworking(ctx, bmi)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(bmi), bmi)).To(Succeed())
+		_, err = reconciler.reconcileNetworking(ctx, bmi)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(seenParking).To(Equal("bm-parking"))
+	})
+})

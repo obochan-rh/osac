@@ -83,6 +83,12 @@ func (r *BareMetalInstanceReconciler) reconcileNetworking(
 		bareMetalInstance.Status.NetworkingJobs = []opv1alpha1.JobStatus{}
 	}
 
+	// Provide the parking V-Net name so the create playbook can detach the port
+	// from parking before attaching it to the tenant V-Net.
+	if r.BMParkingVNet != "" {
+		ctx = provisioning.WithBMParkingVNet(ctx, r.BMParkingVNet)
+	}
+
 	result, err := provisioning.RunProvisioningLifecycle(
 		ctx, r.NetworkingProvider, bareMetalInstance,
 		&provisioning.State{
