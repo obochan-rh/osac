@@ -100,11 +100,20 @@ argument_specs:
       network_attachment:
         type: dict
         required: true
-        description: >-
-          Network attachment parameters from dispatcher. Contains host_name
-          (Netris server name), logical_interface_name (Netris port name),
-          and subnet_ref (OSAC Subnet UUID). If the port is already on
-          another V-Net (e.g. parking network), it is removed first.
+        description: Fabric port + target V-Net for the attach.
+        options:
+          host_name:
+            type: str
+            required: true
+            description: Netris server (host) name.
+          logical_interface_name:
+            type: str
+            required: true
+            description: Server port / logical interface name (e.g. eth9).
+          target_vnet_name:
+            type: str
+            required: true
+            description: Netris V-Net name to attach the port to.
       template_parameters:
         type: dict
         description: Template-specific parameters (reserved for future use)
@@ -116,9 +125,17 @@ argument_specs:
       network_attachment:
         type: dict
         required: true
-        description: >-
-          Network attachment parameters from dispatcher. Contains host_name
-          (Netris server name), logical_interface_name (Netris port name),
-          subnet_ref (OSAC Subnet UUID), and optional parking_vnet_name
-          (V-Net to return port to after removal — used by CaaS; omit for
-          BMaaS to leave port detached).
+        description: Fabric port + target V-Net for the detach.
+        options:
+          host_name:
+            type: str
+            required: true
+            description: Netris server (host) name.
+          logical_interface_name:
+            type: str
+            required: true
+            description: Server port / logical interface name (e.g. eth9).
+          target_vnet_name:
+            type: str
+            required: true
+            description: Netris V-Net name to detach the port from.

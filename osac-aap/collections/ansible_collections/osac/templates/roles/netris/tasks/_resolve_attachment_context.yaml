@@ -1,0 +1,110 @@
+---
+# Shared resolution for netris port attach/detach. Given a host name, a logical
+# interface, and a target V-Net *name*, resolves:
+#   _target_vnet  - full V-Net object (with ports), or none if the V-Net is absent
+#   _target_port  - the server's port for the interface, or none if absent
+# No Subnet CR lookup and no current-owner enumeration here — callers pass a
+# plain Netris V-Net name.
+
+- name: Ensure Netris auth
+  ansible.builtin.include_role:
+    name: netris.controller.auth
+  when: netris_session_cookie is not defined
+
+- name: Get existing V-Nets
+  ansible.builtin.uri:
+    force: true
+    url: "{{ netris_controller_url }}/api/v2/vnet"
+    method: GET
+    headers:
+      Cookie: "connect.sid={{ netris_session_cookie }}"
+      Cache-Control: "no-cache"
+      Pragma: "no-cache"
+    return_content: true
+    status_code: 200
+    timeout: "{{ netris_timeout | default(30) }}"
+    validate_certs: "{{ netris_validate_certs | default(true) }}"
+  register: _rac_vnet_list_resp
+  no_log: true
+
+- name: Find target V-Net summary by name
+  ansible.builtin.set_fact:
+    _rac_vnet_summary: >-
+      {{ (_rac_vnet_list_resp.json.data | default([]))
+         | selectattr('name', 'equalto', na_target_vnet_name)
+         | list | first | default(none) }}
+
+- name: Reset resolved facts
+  ansible.builtin.set_fact:
+    _target_vnet: "{{ none }}"
+    _target_port: "{{ none }}"
+
+- name: Fetch target V-Net details (includes ports)
+  ansible.builtin.uri:
+    force: true
+    url: "{{ netris_controller_url }}/api/v2/vnet/{{ _rac_vnet_summary.id }}"
+    method: GET
+    headers:
+      Cookie: "connect.sid={{ netris_session_cookie }}"
+      Cache-Control: "no-cache"
+      Pragma: "no-cache"
+    return_content: true
+    status_code: 200
+    timeout: "{{ netris_timeout | default(30) }}"
+    validate_certs: "{{ netris_validate_certs | default(true) }}"
+  register: _rac_vnet_resp
+  when: _rac_vnet_summary is not none
+  no_log: true
+
+- name: Set target V-Net fact
+  ansible.builtin.set_fact:
+    _target_vnet: "{{ _rac_vnet_resp.json.data }}"
+  when: _rac_vnet_summary is not none
+
+- name: Get Netris inventory servers
+  ansible.builtin.uri:
+    force: true
+    url: "{{ netris_controller_url }}/api/v2/hw?type=server"
+    method: GET
+    headers:
+      Cookie: "connect.sid={{ netris_session_cookie }}"
+      Cache-Control: "no-cache"
+      Pragma: "no-cache"
+    return_content: true
+    status_code: 200
+    timeout: "{{ netris_timeout | default(30) }}"
+    validate_certs: "{{ netris_validate_certs | default(true) }}"
+  register: _rac_server_list_resp
+  no_log: true
+
+- name: Find server by host_name
+  ansible.builtin.set_fact:
+    _rac_server: >-
+      {{ (_rac_server_list_resp.json.data | default([]))
+         | selectattr('name', 'equalto', na_host_name)
+         | list | first | default(none) }}
+
+- name: Get server ports
+  ansible.builtin.uri:
+    force: true
+    url: "{{ netris_controller_url }}/api/v2/ports?switchID={{ _rac_server.id }}"
+    method: GET
+    headers:
+      Cookie: "connect.sid={{ netris_session_cookie }}"
+      Cache-Control: "no-cache"
+      Pragma: "no-cache"
+    return_content: true
+    status_code: 200
+    timeout: "{{ netris_timeout | default(30) }}"
+    validate_certs: "{{ netris_validate_certs | default(true) }}"
+  register: _rac_ports_resp
+  when: _rac_server is not none
+  no_log: true
+
+- name: Find port matching interface name
+  ansible.builtin.set_fact:
+    _target_port: >-
+      {{ ((_rac_ports_resp.json.data.data | default(_rac_ports_resp.json.data)) | default([]))
+         | selectattr('port', 'equalto', na_logical_interface)
+         | list | first | default(none) }}
+  when: _rac_server is not none
