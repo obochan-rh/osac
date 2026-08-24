@@ -39,7 +39,7 @@ bundledPostgres:
     user: service
 
 # --- Bundled OpenBao ---
-# Single-pod ephemeral Vault-compatible secret store for testing. Dev mode —
+# Single-pod ephemeral Vault-compatible secret store for testing. Dev mode --
 # data is lost on restart. Not for production.
 bundledVault:
   enabled: true

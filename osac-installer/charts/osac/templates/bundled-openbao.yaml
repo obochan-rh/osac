@@ -53,10 +53,6 @@ data:
     #!/usr/bin/env sh
     set -eu
 
-    export BAO_ADDR="https://localhost:8200"
-    export BAO_TOKEN="{{ required "bundledVault.devRootToken must be set" .Values.bundledVault.devRootToken }}"
-    export BAO_CACERT="/vault/tls/ca.crt"
-
     echo "Waiting for OpenBao to become ready..."
     until bao status >/dev/null 2>&1; do
       sleep 1
@@ -112,7 +108,8 @@ data:
       sleep 10
     done
     if [ $attempts -ge $max_attempts ]; then
-      echo "WARNING: Failed to configure OIDC discovery after $max_attempts attempts. Continuing without it."
+      echo "ERROR: Failed to configure OIDC discovery after $max_attempts attempts. Bootstrap cannot complete."
+      exit 1
     else
       echo "Creating lifecycle role..."
       bao write -namespace=osac auth/jwt/role/lifecycle \
@@ -263,6 +260,16 @@ spec:
         - /bin/sh
         - /scripts/init.sh
         env:
+        - name: BAO_ADDR
+          value: "https://localhost:8200"
+        - name: BAO_TOKEN
+          value: {{ required "bundledVault.devRootToken must be set" .Values.bundledVault.devRootToken | quote }}
+        - name: BAO_CACERT
+          {{- if .Values.service.certs.caBundle.configMap }}
+          value: "/vault/ca/bundle.pem"
+          {{- else }}
+          value: "/vault/tls/ca.crt"
+          {{- end }}
         - name: KEYCLOAK_ISSUER_URL
           value: {{ .Values.service.vault.keycloakIssuerUrl | default "" | quote }}
         - name: KEYCLOAK_AUDIENCE
