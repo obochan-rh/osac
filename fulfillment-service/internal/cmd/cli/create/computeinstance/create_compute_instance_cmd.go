@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -36,6 +37,8 @@ import (
 	publicv1 "github.com/osac-project/osac/fulfillment-service/internal/api/osac/public/v1"
 	"github.com/osac-project/osac/fulfillment-service/internal/cmd/cli/create/fieldutil"
 	"github.com/osac-project/osac/fulfillment-service/internal/cmd/cli/create/netutil"
+	"github.com/osac-project/osac/fulfillment-service/internal/cmd/cli/lookup"
+	"github.com/osac-project/osac/fulfillment-service/internal/cmd/cli/wait"
 	"github.com/osac-project/osac/fulfillment-service/internal/config"
 	"github.com/osac-project/osac/fulfillment-service/internal/exit"
 	"github.com/osac-project/osac/fulfillment-service/internal/logging"
@@ -158,7 +161,20 @@ func Cmd() *cobra.Command {
 		nil,
 		setFlagHelp,
 	)
+	flags.StringVar(
+		&runner.args.externalIPPool,
+		"external-ip-pool",
+		"",
+		externalIPPoolFlagHelp,
+	)
+	flags.DurationVar(
+		&runner.args.timeout,
+		"timeout",
+		5*time.Minute,
+		ciTimeoutFlagHelp,
+	)
 
+	result.MarkFlagsMutuallyExclusive("external-ip-attachment", "external-ip-pool")
 	result.MarkFlagsMutuallyExclusive("catalog-item", "template")
 	result.MarkFlagsOneRequired("catalog-item", "template")
 	return result
@@ -182,6 +198,8 @@ type runnerContext struct {
 		userData                string
 		networkAttachments      []string
 		externalIPAttachment    bool
+		externalIPPool          string
+		timeout                 time.Duration
 	}
 	logger                 *slog.Logger
 	console                *terminal.Console
@@ -285,7 +303,7 @@ func (c *runnerContext) run(cmd *cobra.Command, args []string) error {
 
 		computeInstance = response.Object
 		c.console.Infof(ctx, "Created compute instance '%s'.\n", computeInstance.Id)
-		return nil
+		return c.maybeAttachExternalIP(ctx, conn, computeInstance)
 	}
 
 	// Legacy template path (existing code continues below):
@@ -342,6 +360,140 @@ func (c *runnerContext) run(cmd *cobra.Command, args []string) error {
 	computeInstance = response.Object
 	c.console.Infof(ctx, "Created compute instance '%s'.\n", computeInstance.Id)
 
+	return c.maybeAttachExternalIP(ctx, conn, computeInstance)
+}
+
+// maybeAttachExternalIP is a no-op unless --external-ip-pool is provided. When set it:
+//  1. Polls until the ComputeInstance reaches RUNNING state.
+//  2. Creates an ExternalIP from the requested pool.
+//  3. Polls until the ExternalIP reaches ALLOCATED state.
+//  4. Creates an ExternalIPAttachment linking the two resources.
+func (c *runnerContext) maybeAttachExternalIP(ctx context.Context, conn grpc.ClientConnInterface, ci *publicv1.ComputeInstance) error {
+	if c.args.externalIPPool == "" {
+		return nil
+	}
+
+	// Step 1: wait for the compute instance to reach RUNNING.
+	c.console.Infof(ctx, "Waiting for compute instance '%s' to reach RUNNING...\n", ci.GetMetadata().GetName())
+
+	ciClient := publicv1.NewComputeInstancesClient(conn)
+	ci, err := wait.Poll(ctx, wait.Options[*publicv1.ComputeInstance]{
+		Fetch: func(ctx context.Context) (*publicv1.ComputeInstance, error) {
+			resp, err := ciClient.Get(ctx, publicv1.ComputeInstancesGetRequest_builder{
+				Id: ci.GetId(),
+			}.Build())
+			if err != nil {
+				return nil, fmt.Errorf("failed to poll compute instance: %w", err)
+			}
+			return resp.GetObject(), nil
+		},
+		StateOf: func(r *publicv1.ComputeInstance) string {
+			return r.GetStatus().GetState().String()
+		},
+		TargetState: publicv1.ComputeInstanceState_COMPUTE_INSTANCE_STATE_RUNNING.String(),
+		FailureStates: []string{
+			publicv1.ComputeInstanceState_COMPUTE_INSTANCE_STATE_FAILED.String(),
+			publicv1.ComputeInstanceState_COMPUTE_INSTANCE_STATE_DELETING.String(),
+		},
+		Timeout: c.args.timeout,
+		OnProgress: func(r *publicv1.ComputeInstance) {
+			c.console.Infof(ctx, "  compute instance '%s': %s\n",
+				r.GetMetadata().GetName(), r.GetStatus().GetState().String())
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("compute instance '%s' did not reach RUNNING: %w", ci.GetMetadata().GetName(), err)
+	}
+
+	// Step 2: resolve pool and create ExternalIP.
+	poolClient := publicv1.NewExternalIPPoolsClient(conn)
+	pool, err := lookup.Find(c.args.externalIPPool, "external IP pool", func(filter string, limit int32) ([]*publicv1.ExternalIPPool, error) {
+		resp, err := poolClient.List(ctx, publicv1.ExternalIPPoolsListRequest_builder{
+			Filter: proto.String(filter),
+			Limit:  proto.Int32(limit),
+		}.Build())
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve external IP pool %q: %w", c.args.externalIPPool, err)
+		}
+		return resp.GetItems(), nil
+	})
+	if err != nil {
+		return err
+	}
+
+	eipClient := publicv1.NewExternalIPsClient(conn)
+	eipResp, err := eipClient.Create(ctx, publicv1.ExternalIPsCreateRequest_builder{
+		Object: publicv1.ExternalIP_builder{
+			Metadata: publicv1.Metadata_builder{
+				Tenant: c.settings.Tenant(),
+			}.Build(),
+			Spec: publicv1.ExternalIPSpec_builder{
+				Pool: &publicv1.ExternalIPPoolReference{Id: pool.GetId()},
+			}.Build(),
+		}.Build(),
+	}.Build())
+	if err != nil {
+		return fmt.Errorf("failed to create external IP: %w", err)
+	}
+	eip := eipResp.GetObject()
+
+	// Step 3: wait for ExternalIP ALLOCATED.
+	c.console.Infof(ctx, "Created external IP '%s' (ID: %s). Waiting for ALLOCATED...\n",
+		eip.GetMetadata().GetName(), eip.GetId())
+
+	eip, err = wait.Poll(ctx, wait.Options[*publicv1.ExternalIP]{
+		Fetch: func(ctx context.Context) (*publicv1.ExternalIP, error) {
+			resp, err := eipClient.Get(ctx, publicv1.ExternalIPsGetRequest_builder{
+				Id: eip.GetId(),
+			}.Build())
+			if err != nil {
+				return nil, fmt.Errorf("failed to poll external IP: %w", err)
+			}
+			return resp.GetObject(), nil
+		},
+		StateOf: func(r *publicv1.ExternalIP) string {
+			return r.GetStatus().GetState().String()
+		},
+		TargetState: publicv1.ExternalIPState_EXTERNAL_IP_STATE_ALLOCATED.String(),
+		FailureStates: []string{
+			publicv1.ExternalIPState_EXTERNAL_IP_STATE_FAILED.String(),
+			publicv1.ExternalIPState_EXTERNAL_IP_STATE_DELETING.String(),
+		},
+		Timeout: c.args.timeout,
+		OnProgress: func(r *publicv1.ExternalIP) {
+			c.console.Infof(ctx, "  external IP '%s': %s\n",
+				r.GetMetadata().GetName(), r.GetStatus().GetState().String())
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("external IP '%s' did not reach ALLOCATED: %w", eip.GetMetadata().GetName(), err)
+	}
+
+	// Step 4: attach.
+	attachClient := publicv1.NewExternalIPAttachmentsClient(conn)
+	attachResp, err := attachClient.Create(ctx, publicv1.ExternalIPAttachmentsCreateRequest_builder{
+		Object: publicv1.ExternalIPAttachment_builder{
+			Metadata: publicv1.Metadata_builder{
+				Tenant: c.settings.Tenant(),
+			}.Build(),
+			Spec: publicv1.ExternalIPAttachmentSpec_builder{
+				ExternalIp:      &publicv1.ExternalIPLocalReference{Id: eip.GetId()},
+				ComputeInstance: &publicv1.ComputeInstanceLocalReference{Id: ci.GetId()},
+			}.Build(),
+		}.Build(),
+	}.Build())
+	if err != nil {
+		return fmt.Errorf(
+			"external IP '%s' is ALLOCATED but attachment to compute instance '%s' failed: %w",
+			eip.GetMetadata().GetName(), ci.GetMetadata().GetName(), err,
+		)
+	}
+
+	c.console.Infof(ctx,
+		"Attached external IP '%s' (address: %s) to compute instance '%s' (attachment ID: %s).\n",
+		eip.GetMetadata().GetName(), eip.GetStatus().GetAddress(),
+		ci.GetMetadata().GetName(), attachResp.GetObject().GetId(),
+	)
 	return nil
 }
 
@@ -1099,4 +1251,17 @@ _KEY=VALUE_ - Set a spec field or template parameter on the resource.
 Use dot notation for nested fields (e.g.
 {{ bt }}template_parameters.vpc_id=vpc-123{{ bt }}). Only supported
 with {{ bt }}--catalog-item{{ bt }}. Can be specified multiple times.
+`
+
+const externalIPPoolFlagHelp = `
+_ID|NAME_ - ID or name of an ExternalIPPool to allocate an ExternalIP from and
+attach to the new compute instance once it reaches RUNNING state. When set, the
+command blocks until the ExternalIPAttachment is created or the timeout expires.
+Mutually exclusive with {{ bt }}--external-ip-attachment{{ bt }}.
+`
+
+const ciTimeoutFlagHelp = `
+_DURATION_ - Maximum time to wait for each async state transition when
+{{ bt }}--external-ip-pool{{ bt }} is provided (e.g. "5m", "10m30s"). Defaults
+to 5 minutes. Applied independently to the RUNNING wait and the ALLOCATED wait.
 `
