@@ -226,10 +226,10 @@ var _ = Describe("inferFlow", func() {
 		Expect(runner.args.flow).To(Equal(string(oauth.CredentialsFlow)))
 	})
 
-	It("sets credentials flow when --client-id-file is provided", func() {
+	It("does not infer flow when only --client-id-file is provided (client ID alone is insufficient)", func() {
 		Expect(runner.flags.Parse([]string{"--client-id-file=foo"})).To(Succeed())
 		Expect(runner.inferFlow(context.Background())).To(Succeed())
-		Expect(runner.args.flow).To(Equal(string(oauth.CredentialsFlow)))
+		Expect(runner.args.flow).To(Equal(defaultFlow))
 	})
 
 	It("sets password flow when --user-file is provided", func() {

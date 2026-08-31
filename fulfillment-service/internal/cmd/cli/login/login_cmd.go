@@ -117,10 +117,22 @@ func Cmd() *cobra.Command {
 		clientIdFlagHelp,
 	)
 	flags.StringVar(
+		&runner.args.clientIdFile,
+		"client-id-file",
+		"",
+		clientIdFileFlagHelp,
+	)
+	flags.StringVar(
 		&runner.args.clientSecret,
 		"client-secret",
 		"",
 		clientSecretFlagHelp,
+	)
+	flags.StringVar(
+		&runner.args.clientSecretFile,
+		"client-secret-file",
+		"",
+		clientSecretFileFlagHelp,
 	)
 	flags.StringSliceVar(
 		&runner.args.scopes,
@@ -141,6 +153,12 @@ func Cmd() *cobra.Command {
 		userFlagHelp,
 	)
 	flags.StringVar(
+		&runner.args.userFile,
+		"user-file",
+		"",
+		userFileFlagHelp,
+	)
+	flags.StringVar(
 		&runner.args.password,
 		"password",
 		"",
@@ -151,24 +169,6 @@ func Cmd() *cobra.Command {
 		"password-file",
 		"",
 		passwordFileFlagHelp,
-	)
-	flags.StringVar(
-		&runner.args.clientSecretFile,
-		"client-secret-file",
-		"",
-		clientSecretFileFlagHelp,
-	)
-	flags.StringVar(
-		&runner.args.userFile,
-		"user-file",
-		"",
-		userFileFlagHelp,
-	)
-	flags.StringVar(
-		&runner.args.clientIdFile,
-		"client-id-file",
-		"",
-		clientIdFileFlagHelp,
 	)
 
 	// Define the depreacated alternatives for the OAuth flags:
@@ -257,15 +257,15 @@ type runnerContext struct {
 		issuer           string
 		flow             string
 		clientId         string
+		clientIdFile     string
 		clientSecret     string
+		clientSecretFile string
 		scopes           []string
 		redirectUri      string
 		user             string
+		userFile         string
 		password         string
 		passwordFile     string
-		clientSecretFile string
-		userFile         string
-		clientIdFile     string
 	}
 }
 
@@ -681,7 +681,7 @@ func (c *runnerContext) inferFlow(ctx context.Context) error {
 		return nil
 	}
 	credentialsHint := c.flags.Changed("client-secret") || c.flags.Changed("oauth-client-secret") ||
-		c.flags.Changed("client-secret-file") || c.flags.Changed("client-id-file")
+		c.flags.Changed("client-secret-file")
 	passwordHint := c.flags.Changed("user") || c.flags.Changed("oauth-user") || c.flags.Changed("password") ||
 		c.flags.Changed("oauth-password") || c.flags.Changed("user-file") || c.flags.Changed("password-file")
 	if credentialsHint && passwordHint {
