@@ -247,19 +247,19 @@ type runnerContext struct {
 	caPool     *x509.CertPool
 	tokenStore auth.TokenStore
 	args       struct {
-		plaintext    bool
-		insecure     bool
-		caFiles      []string
-		address      string
-		private      bool
-		token        string
-		tokenScript  string
-		issuer       string
-		flow         string
-		clientId     string
-		clientSecret string
-		scopes       []string
-		redirectUri  string
+		plaintext        bool
+		insecure         bool
+		caFiles          []string
+		address          string
+		private          bool
+		token            string
+		tokenScript      string
+		issuer           string
+		flow             string
+		clientId         string
+		clientSecret     string
+		scopes           []string
+		redirectUri      string
 		user             string
 		password         string
 		passwordFile     string
