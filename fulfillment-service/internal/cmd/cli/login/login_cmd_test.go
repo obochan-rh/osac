@@ -37,7 +37,7 @@ var _ = Describe("readTrimmedFile", func() {
 	})
 
 	AfterEach(func() {
-		os.RemoveAll(tmpDir)
+		Expect(os.RemoveAll(tmpDir)).To(Succeed())
 	})
 
 	It("reads a file and trims a trailing newline", func() {
@@ -68,6 +68,11 @@ var _ = Describe("readTrimmedFile", func() {
 		_, err := runner.readTrimmedFile(filepath.Join(tmpDir, "nonexistent.txt"))
 		Expect(err).To(HaveOccurred())
 	})
+
+	It("returns an error when the path is a directory", func() {
+		_, err := runner.readTrimmedFile(tmpDir)
+		Expect(err).To(MatchError(ContainSubstring("not a regular file")))
+	})
 })
 
 // newFileFlagSet creates a minimal pflag.FlagSet that covers all flags read by
@@ -82,13 +87,13 @@ func newFileFlagSet(r *runnerContext) *pflag.FlagSet {
 	fs.StringVar(&r.args.userFile, "user-file", "", "")
 	fs.StringVar(&r.args.clientId, "client-id", "", "")
 	fs.StringVar(&r.args.clientIdFile, "client-id-file", "", "")
-	// inferFlow also checks these:
+	// inferFlow and resolveFileFlags also check these deprecated aliases:
 	fs.StringVar(&r.args.flow, "flow", defaultFlow, "")
 	fs.StringVar(&r.args.flow, "oauth-flow", defaultFlow, "")
-	var dummy string
-	fs.StringVar(&dummy, "oauth-client-secret", "", "")
-	fs.StringVar(&dummy, "oauth-user", "", "")
-	fs.StringVar(&dummy, "oauth-password", "", "")
+	fs.StringVar(&r.args.clientSecret, "oauth-client-secret", "", "")
+	fs.StringVar(&r.args.user, "oauth-user", "", "")
+	fs.StringVar(&r.args.password, "oauth-password", "", "")
+	fs.StringVar(&r.args.clientId, "oauth-client-id", "", "")
 	return fs
 }
 
@@ -105,7 +110,7 @@ var _ = Describe("resolveFileFlags", func() {
 	})
 
 	AfterEach(func() {
-		os.RemoveAll(tmpDir)
+		Expect(os.RemoveAll(tmpDir)).To(Succeed())
 	})
 
 	writeFile := func(name, content string) string {
@@ -175,6 +180,32 @@ var _ = Describe("resolveFileFlags", func() {
 		It("returns an error when both --client-id and --client-id-file are provided", func() {
 			path := writeFile("id.txt", "my-client\n")
 			Expect(runner.flags.Parse([]string{"--client-id=other", "--client-id-file=" + path})).To(Succeed())
+			Expect(runner.resolveFileFlags()).To(MatchError(ContainSubstring("mutually exclusive")))
+		})
+	})
+
+	Describe("deprecated oauth-* alias conflicts", func() {
+		It("returns an error when --oauth-password and --password-file are both provided", func() {
+			path := writeFile("pw.txt", "secret\n")
+			Expect(runner.flags.Parse([]string{"--oauth-password=direct", "--password-file=" + path})).To(Succeed())
+			Expect(runner.resolveFileFlags()).To(MatchError(ContainSubstring("mutually exclusive")))
+		})
+
+		It("returns an error when --oauth-client-secret and --client-secret-file are both provided", func() {
+			path := writeFile("secret.txt", "tok\n")
+			Expect(runner.flags.Parse([]string{"--oauth-client-secret=direct", "--client-secret-file=" + path})).To(Succeed())
+			Expect(runner.resolveFileFlags()).To(MatchError(ContainSubstring("mutually exclusive")))
+		})
+
+		It("returns an error when --oauth-user and --user-file are both provided", func() {
+			path := writeFile("user.txt", "alice\n")
+			Expect(runner.flags.Parse([]string{"--oauth-user=bob", "--user-file=" + path})).To(Succeed())
+			Expect(runner.resolveFileFlags()).To(MatchError(ContainSubstring("mutually exclusive")))
+		})
+
+		It("returns an error when --oauth-client-id and --client-id-file are both provided", func() {
+			path := writeFile("id.txt", "my-client\n")
+			Expect(runner.flags.Parse([]string{"--oauth-client-id=other", "--client-id-file=" + path})).To(Succeed())
 			Expect(runner.resolveFileFlags()).To(MatchError(ContainSubstring("mutually exclusive")))
 		})
 	})

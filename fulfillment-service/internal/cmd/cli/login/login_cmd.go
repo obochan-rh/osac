@@ -270,9 +270,19 @@ type runnerContext struct {
 }
 
 // readTrimmedFile reads the content of the given file and returns it with all leading and
-// trailing whitespace removed.
+// trailing whitespace removed. It rejects non-regular files (directories, FIFOs, devices)
+// to prevent blocking reads from special files.
 func (c *runnerContext) readTrimmedFile(file string) (result string, err error) {
-	data, err := os.ReadFile(filepath.Clean(file))
+	cleanPath := filepath.Clean(file)
+	info, err := os.Stat(cleanPath)
+	if err != nil {
+		return
+	}
+	if !info.Mode().IsRegular() {
+		err = fmt.Errorf("'%s' is not a regular file", file)
+		return
+	}
+	data, err := os.ReadFile(cleanPath)
 	if err != nil {
 		return
 	}
@@ -297,14 +307,8 @@ func (c *runnerContext) run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load templates: %w", err)
 	}
 
-	// Resolve *-file flags, populating the underlying fields before flow inference.
-	err = c.resolveFileFlags()
-	if err != nil {
-		return err
-	}
-
-	// Infer the OAuth flow from other flags when it hasn't been explicitly set:
-	err = c.inferFlow(ctx)
+	// Resolve *-file flags and infer the OAuth flow in one combined step:
+	err = c.resolveAndInferFlow(ctx)
 	if err != nil {
 		return err
 	}
@@ -610,14 +614,24 @@ func (c *runnerContext) createTokenSource(ctx context.Context, tokenIssuer strin
 	return
 }
 
+// resolveAndInferFlow resolves *-file flags and then infers the OAuth flow. Combining the two
+// steps into one call keeps run() under the cyclomatic-complexity limit while preserving the
+// required ordering: file flags must be resolved before the Changed() checks in inferFlow.
+func (c *runnerContext) resolveAndInferFlow(ctx context.Context) error {
+	if err := c.resolveFileFlags(); err != nil {
+		return err
+	}
+	return c.inferFlow(ctx)
+}
+
 // resolveFileFlags reads each *-file flag and populates the corresponding plain field. It returns
-// an error if a *-file flag and its direct counterpart are both set, or if the file cannot be read.
-// It must be called before inferFlow so that Changed() checks on the *-file flags are still
-// effective for flow inference.
+// an error if a *-file flag and its direct counterpart (or its deprecated oauth-* alias) are both
+// set, or if the file cannot be read. It must be called before inferFlow so that Changed() checks
+// on the *-file flags are still effective for flow inference.
 func (c *runnerContext) resolveFileFlags() error {
 	if c.flags.Changed("password-file") {
-		if c.flags.Changed("password") {
-			return fmt.Errorf("flags '--password' and '--password-file' are mutually exclusive")
+		if c.flags.Changed("password") || c.flags.Changed("oauth-password") {
+			return fmt.Errorf("flags '--password'/'--oauth-password' and '--password-file' are mutually exclusive")
 		}
 		secret, err := c.readTrimmedFile(c.args.passwordFile)
 		if err != nil {
@@ -626,8 +640,8 @@ func (c *runnerContext) resolveFileFlags() error {
 		c.args.password = secret
 	}
 	if c.flags.Changed("client-secret-file") {
-		if c.flags.Changed("client-secret") {
-			return fmt.Errorf("flags '--client-secret' and '--client-secret-file' are mutually exclusive")
+		if c.flags.Changed("client-secret") || c.flags.Changed("oauth-client-secret") {
+			return fmt.Errorf("flags '--client-secret'/'--oauth-client-secret' and '--client-secret-file' are mutually exclusive")
 		}
 		secret, err := c.readTrimmedFile(c.args.clientSecretFile)
 		if err != nil {
@@ -636,8 +650,8 @@ func (c *runnerContext) resolveFileFlags() error {
 		c.args.clientSecret = secret
 	}
 	if c.flags.Changed("user-file") {
-		if c.flags.Changed("user") {
-			return fmt.Errorf("flags '--user' and '--user-file' are mutually exclusive")
+		if c.flags.Changed("user") || c.flags.Changed("oauth-user") {
+			return fmt.Errorf("flags '--user'/'--oauth-user' and '--user-file' are mutually exclusive")
 		}
 		user, err := c.readTrimmedFile(c.args.userFile)
 		if err != nil {
@@ -646,8 +660,8 @@ func (c *runnerContext) resolveFileFlags() error {
 		c.args.user = user
 	}
 	if c.flags.Changed("client-id-file") {
-		if c.flags.Changed("client-id") {
-			return fmt.Errorf("flags '--client-id' and '--client-id-file' are mutually exclusive")
+		if c.flags.Changed("client-id") || c.flags.Changed("oauth-client-id") {
+			return fmt.Errorf("flags '--client-id'/'--oauth-client-id' and '--client-id-file' are mutually exclusive")
 		}
 		clientId, err := c.readTrimmedFile(c.args.clientIdFile)
 		if err != nil {
