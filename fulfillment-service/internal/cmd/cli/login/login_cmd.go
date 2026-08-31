@@ -21,6 +21,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -145,6 +146,30 @@ func Cmd() *cobra.Command {
 		"",
 		passwordFlagHelp,
 	)
+	flags.StringVar(
+		&runner.args.passwordFile,
+		"password-file",
+		"",
+		passwordFileFlagHelp,
+	)
+	flags.StringVar(
+		&runner.args.clientSecretFile,
+		"client-secret-file",
+		"",
+		clientSecretFileFlagHelp,
+	)
+	flags.StringVar(
+		&runner.args.userFile,
+		"user-file",
+		"",
+		userFileFlagHelp,
+	)
+	flags.StringVar(
+		&runner.args.clientIdFile,
+		"client-id-file",
+		"",
+		clientIdFileFlagHelp,
+	)
 
 	// Define the depreacated alternatives for the OAuth flags:
 	flags.StringVar(
@@ -235,9 +260,24 @@ type runnerContext struct {
 		clientSecret string
 		scopes       []string
 		redirectUri  string
-		user         string
-		password     string
+		user             string
+		password         string
+		passwordFile     string
+		clientSecretFile string
+		userFile         string
+		clientIdFile     string
 	}
+}
+
+// readTrimmedFile reads the content of the given file and returns it with all leading and
+// trailing whitespace removed.
+func (c *runnerContext) readTrimmedFile(file string) (result string, err error) {
+	data, err := os.ReadFile(filepath.Clean(file))
+	if err != nil {
+		return
+	}
+	result = strings.TrimSpace(string(data))
+	return
 }
 
 func (c *runnerContext) run(cmd *cobra.Command, args []string) error {
@@ -255,6 +295,12 @@ func (c *runnerContext) run(cmd *cobra.Command, args []string) error {
 	err = c.console.AddTemplates(templatesFS, "templates")
 	if err != nil {
 		return fmt.Errorf("failed to load templates: %w", err)
+	}
+
+	// Resolve *-file flags, populating the underlying fields before flow inference.
+	err = c.resolveFileFlags()
+	if err != nil {
+		return err
 	}
 
 	// Infer the OAuth flow from other flags when it hasn't been explicitly set:
@@ -564,6 +610,54 @@ func (c *runnerContext) createTokenSource(ctx context.Context, tokenIssuer strin
 	return
 }
 
+// resolveFileFlags reads each *-file flag and populates the corresponding plain field. It returns
+// an error if a *-file flag and its direct counterpart are both set, or if the file cannot be read.
+// It must be called before inferFlow so that Changed() checks on the *-file flags are still
+// effective for flow inference.
+func (c *runnerContext) resolveFileFlags() error {
+	if c.flags.Changed("password-file") {
+		if c.flags.Changed("password") {
+			return fmt.Errorf("flags '--password' and '--password-file' are mutually exclusive")
+		}
+		secret, err := c.readTrimmedFile(c.args.passwordFile)
+		if err != nil {
+			return fmt.Errorf("failed to read password file '%s': %w", c.args.passwordFile, err)
+		}
+		c.args.password = secret
+	}
+	if c.flags.Changed("client-secret-file") {
+		if c.flags.Changed("client-secret") {
+			return fmt.Errorf("flags '--client-secret' and '--client-secret-file' are mutually exclusive")
+		}
+		secret, err := c.readTrimmedFile(c.args.clientSecretFile)
+		if err != nil {
+			return fmt.Errorf("failed to read client secret file '%s': %w", c.args.clientSecretFile, err)
+		}
+		c.args.clientSecret = secret
+	}
+	if c.flags.Changed("user-file") {
+		if c.flags.Changed("user") {
+			return fmt.Errorf("flags '--user' and '--user-file' are mutually exclusive")
+		}
+		user, err := c.readTrimmedFile(c.args.userFile)
+		if err != nil {
+			return fmt.Errorf("failed to read user file '%s': %w", c.args.userFile, err)
+		}
+		c.args.user = user
+	}
+	if c.flags.Changed("client-id-file") {
+		if c.flags.Changed("client-id") {
+			return fmt.Errorf("flags '--client-id' and '--client-id-file' are mutually exclusive")
+		}
+		clientId, err := c.readTrimmedFile(c.args.clientIdFile)
+		if err != nil {
+			return fmt.Errorf("failed to read client ID file '%s': %w", c.args.clientIdFile, err)
+		}
+		c.args.clientId = clientId
+	}
+	return nil
+}
+
 // inferFlow infers the OAuth flow from other command line flags when the user hasn't explicitly set the '--flow' flag.
 // If '--client-secret' is provided, the flow is inferred to be 'credentials'. If '--user' or '--password' is provided,
 // the flow is inferred to be 'password'. If both sets of flags are present without an explicit '--flow', an error is
@@ -572,9 +666,10 @@ func (c *runnerContext) inferFlow(ctx context.Context) error {
 	if c.flags.Changed("flow") || c.flags.Changed("oauth-flow") {
 		return nil
 	}
-	credentialsHint := c.flags.Changed("client-secret") || c.flags.Changed("oauth-client-secret")
+	credentialsHint := c.flags.Changed("client-secret") || c.flags.Changed("oauth-client-secret") ||
+		c.flags.Changed("client-secret-file") || c.flags.Changed("client-id-file")
 	passwordHint := c.flags.Changed("user") || c.flags.Changed("oauth-user") || c.flags.Changed("password") ||
-		c.flags.Changed("oauth-password")
+		c.flags.Changed("oauth-password") || c.flags.Changed("user-file") || c.flags.Changed("password-file")
 	if credentialsHint && passwordHint {
 		c.console.Render(ctx, "ambiguous_flow.txt", nil)
 		return exit.Error(1)
@@ -759,4 +854,20 @@ _USER_ - OAuth user name. Required when using the {{ bt }}password{{ bt }} flow,
 const passwordFlagHelp = `
 _PASSWORD_ - OAuth password. Required when using the {{ bt }}password{{ bt }} flow, along with the
 {{ bt }}--user{{ bt }} flag.
+`
+
+const passwordFileFlagHelp = `
+_FILE_ - File containing the OAuth password. Mutually exclusive with {{ bt }}--password{{ bt }}.
+`
+
+const clientSecretFileFlagHelp = `
+_FILE_ - File containing the OAuth client secret. Mutually exclusive with {{ bt }}--client-secret{{ bt }}.
+`
+
+const userFileFlagHelp = `
+_FILE_ - File containing the OAuth user name. Mutually exclusive with {{ bt }}--user{{ bt }}.
+`
+
+const clientIdFileFlagHelp = `
+_FILE_ - File containing the OAuth client identifier. Mutually exclusive with {{ bt }}--client-id{{ bt }}.
 `
