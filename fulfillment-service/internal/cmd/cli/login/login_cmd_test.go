@@ -41,19 +41,21 @@ var _ = Describe("readTrimmedFile", func() {
 	})
 
 	It("reads a file and trims a trailing newline", func() {
+		testValue := "test-fixture-value"
 		f := filepath.Join(tmpDir, "secret.txt")
-		Expect(os.WriteFile(f, []byte("mysecret\n"), 0600)).To(Succeed())
+		Expect(os.WriteFile(f, []byte(testValue+"\n"), 0600)).To(Succeed())
 		result, err := runner.readTrimmedFile(f)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(result).To(Equal("mysecret"))
+		Expect(result).To(Equal(testValue))
 	})
 
 	It("reads a file and trims surrounding whitespace", func() {
+		testValue := "test-fixture-value"
 		f := filepath.Join(tmpDir, "secret.txt")
-		Expect(os.WriteFile(f, []byte("  mysecret  \n"), 0600)).To(Succeed())
+		Expect(os.WriteFile(f, []byte("  "+testValue+"  \n"), 0600)).To(Succeed())
 		result, err := runner.readTrimmedFile(f)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(result).To(Equal("mysecret"))
+		Expect(result).To(Equal(testValue))
 	})
 
 	It("reads an empty file and returns an empty string", func() {
@@ -121,15 +123,16 @@ var _ = Describe("resolveFileFlags", func() {
 
 	Describe("--password-file", func() {
 		It("reads password from file and trims whitespace", func() {
-			path := writeFile("pw.txt", "mypassword\n")
+			testPassword := "test-pw-fixture"
+			path := writeFile("pw.txt", testPassword+"\n")
 			Expect(runner.flags.Parse([]string{"--password-file=" + path})).To(Succeed())
 			Expect(runner.resolveFileFlags()).To(Succeed())
-			Expect(runner.args.password).To(Equal("mypassword"))
+			Expect(runner.args.password).To(Equal(testPassword))
 		})
 
 		It("returns an error when both --password and --password-file are provided", func() {
-			path := writeFile("pw.txt", "mypassword\n")
-			Expect(runner.flags.Parse([]string{"--password=direct", "--password-file=" + path})).To(Succeed())
+			path := writeFile("pw.txt", "test-pw-fixture\n")
+			Expect(runner.flags.Parse([]string{"--password=test-direct", "--password-file=" + path})).To(Succeed())
 			Expect(runner.resolveFileFlags()).To(MatchError(ContainSubstring("mutually exclusive")))
 		})
 
@@ -141,71 +144,74 @@ var _ = Describe("resolveFileFlags", func() {
 
 	Describe("--client-secret-file", func() {
 		It("reads client secret from file and trims whitespace", func() {
-			path := writeFile("secret.txt", "tok123\n")
+			testSecret := "test-secret-fixture"
+			path := writeFile("secret.txt", testSecret+"\n")
 			Expect(runner.flags.Parse([]string{"--client-secret-file=" + path})).To(Succeed())
 			Expect(runner.resolveFileFlags()).To(Succeed())
-			Expect(runner.args.clientSecret).To(Equal("tok123"))
+			Expect(runner.args.clientSecret).To(Equal(testSecret))
 		})
 
 		It("returns an error when both --client-secret and --client-secret-file are provided", func() {
-			path := writeFile("secret.txt", "tok123\n")
-			Expect(runner.flags.Parse([]string{"--client-secret=direct", "--client-secret-file=" + path})).To(Succeed())
+			path := writeFile("secret.txt", "test-secret-fixture\n")
+			Expect(runner.flags.Parse([]string{"--client-secret=test-direct", "--client-secret-file=" + path})).To(Succeed())
 			Expect(runner.resolveFileFlags()).To(MatchError(ContainSubstring("mutually exclusive")))
 		})
 	})
 
 	Describe("--user-file", func() {
 		It("reads user from file and trims whitespace", func() {
-			path := writeFile("user.txt", "alice\n")
+			testUser := "test-user-fixture"
+			path := writeFile("user.txt", testUser+"\n")
 			Expect(runner.flags.Parse([]string{"--user-file=" + path})).To(Succeed())
 			Expect(runner.resolveFileFlags()).To(Succeed())
-			Expect(runner.args.user).To(Equal("alice"))
+			Expect(runner.args.user).To(Equal(testUser))
 		})
 
 		It("returns an error when both --user and --user-file are provided", func() {
-			path := writeFile("user.txt", "alice\n")
-			Expect(runner.flags.Parse([]string{"--user=bob", "--user-file=" + path})).To(Succeed())
+			path := writeFile("user.txt", "test-user-fixture\n")
+			Expect(runner.flags.Parse([]string{"--user=test-other", "--user-file=" + path})).To(Succeed())
 			Expect(runner.resolveFileFlags()).To(MatchError(ContainSubstring("mutually exclusive")))
 		})
 	})
 
 	Describe("--client-id-file", func() {
 		It("reads client ID from file and trims whitespace", func() {
-			path := writeFile("id.txt", "my-client\n")
+			testClientId := "test-client-fixture"
+			path := writeFile("id.txt", testClientId+"\n")
 			Expect(runner.flags.Parse([]string{"--client-id-file=" + path})).To(Succeed())
 			Expect(runner.resolveFileFlags()).To(Succeed())
-			Expect(runner.args.clientId).To(Equal("my-client"))
+			Expect(runner.args.clientId).To(Equal(testClientId))
 		})
 
 		It("returns an error when both --client-id and --client-id-file are provided", func() {
-			path := writeFile("id.txt", "my-client\n")
-			Expect(runner.flags.Parse([]string{"--client-id=other", "--client-id-file=" + path})).To(Succeed())
+			path := writeFile("id.txt", "test-client-fixture\n")
+			Expect(runner.flags.Parse([]string{"--client-id=test-other", "--client-id-file=" + path})).To(Succeed())
 			Expect(runner.resolveFileFlags()).To(MatchError(ContainSubstring("mutually exclusive")))
 		})
 	})
 
 	Describe("deprecated oauth-* alias conflicts", func() {
 		It("returns an error when --oauth-password and --password-file are both provided", func() {
-			path := writeFile("pw.txt", "secret\n")
-			Expect(runner.flags.Parse([]string{"--oauth-password=direct", "--password-file=" + path})).To(Succeed())
+			path := writeFile("pw.txt", "test-fixture\n")
+			Expect(runner.flags.Parse([]string{"--oauth-password=test-direct", "--password-file=" + path})).To(Succeed())
 			Expect(runner.resolveFileFlags()).To(MatchError(ContainSubstring("mutually exclusive")))
 		})
 
 		It("returns an error when --oauth-client-secret and --client-secret-file are both provided", func() {
-			path := writeFile("secret.txt", "tok\n")
-			Expect(runner.flags.Parse([]string{"--oauth-client-secret=direct", "--client-secret-file=" + path})).To(Succeed())
+			path := writeFile("secret.txt", "test-fixture\n")
+			Expect(runner.flags.Parse([]string{"--oauth-client-secret=test-direct", "--client-secret-file=" + path})).To(Succeed())
 			Expect(runner.resolveFileFlags()).To(MatchError(ContainSubstring("mutually exclusive")))
 		})
 
 		It("returns an error when --oauth-user and --user-file are both provided", func() {
-			path := writeFile("user.txt", "alice\n")
-			Expect(runner.flags.Parse([]string{"--oauth-user=bob", "--user-file=" + path})).To(Succeed())
+			path := writeFile("user.txt", "test-user-fixture\n")
+			Expect(runner.flags.Parse([]string{"--oauth-user=test-other", "--user-file=" + path})).To(Succeed())
 			Expect(runner.resolveFileFlags()).To(MatchError(ContainSubstring("mutually exclusive")))
 		})
 
 		It("returns an error when --oauth-client-id and --client-id-file are both provided", func() {
-			path := writeFile("id.txt", "my-client\n")
-			Expect(runner.flags.Parse([]string{"--oauth-client-id=other", "--client-id-file=" + path})).To(Succeed())
+			path := writeFile("id.txt", "test-client-fixture\n")
+			Expect(runner.flags.Parse([]string{"--oauth-client-id=test-other", "--client-id-file=" + path})).To(Succeed())
 			Expect(runner.resolveFileFlags()).To(MatchError(ContainSubstring("mutually exclusive")))
 		})
 	})

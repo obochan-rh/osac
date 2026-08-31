@@ -269,9 +269,13 @@ type runnerContext struct {
 	}
 }
 
+// maxCredentialFileSize is the upper bound for credential files read by readTrimmedFile.
+// Passwords and secrets are never this large; anything bigger is almost certainly a mistake.
+const maxCredentialFileSize = 1 << 20 // 1 MiB
+
 // readTrimmedFile reads the content of the given file and returns it with all leading and
 // trailing whitespace removed. It rejects non-regular files (directories, FIFOs, devices)
-// to prevent blocking reads from special files.
+// to prevent blocking reads from special files, and files larger than maxCredentialFileSize.
 func (c *runnerContext) readTrimmedFile(file string) (result string, err error) {
 	cleanPath := filepath.Clean(file)
 	info, err := os.Stat(cleanPath)
@@ -280,6 +284,10 @@ func (c *runnerContext) readTrimmedFile(file string) (result string, err error) 
 	}
 	if !info.Mode().IsRegular() {
 		err = fmt.Errorf("'%s' is not a regular file", file)
+		return
+	}
+	if info.Size() > maxCredentialFileSize {
+		err = fmt.Errorf("'%s' exceeds the maximum credential file size (%d bytes)", file, maxCredentialFileSize)
 		return
 	}
 	data, err := os.ReadFile(cleanPath)
@@ -834,10 +842,11 @@ const flowFlagHelp = `
 _FLOW_ - OAuth flow to use. Must be one of {{ bt }}code{{ bt }}, {{ bt }}device{{ bt }}, {{ bt }}credentials{{ bt }} or
 {{ bt }}password{{ bt }}.
 
-When this flag is omitted, the flow is inferred from other flags. If {{ bt }}--client-secret{{ bt }} is provided, the
-flow is set to {{ bt }}credentials{{ bt }}. If {{ bt }}--user{{ bt }} or {{ bt }}--password{{ bt }} is provided, the
-flow is set to {{ bt }}password{{ bt }}. If both {{ bt }}--client-secret{{ bt }} and {{ bt }}--user{{ bt }} or {{ bt
-}}--password{{ bt }} are provided, the flow cannot be inferred and this flag must be set explicitly.
+When this flag is omitted, the flow is inferred from other flags. If {{ bt }}--client-secret{{ bt }} or {{ bt
+}}--client-secret-file{{ bt }} is provided, the flow is set to {{ bt }}credentials{{ bt }}. If {{ bt }}--user{{ bt }},
+{{ bt }}--user-file{{ bt }}, {{ bt }}--password{{ bt }}, or {{ bt }}--password-file{{ bt }} is provided, the flow is
+set to {{ bt }}password{{ bt }}. If both credential and password hints are present, the flow cannot be inferred and
+this flag must be set explicitly.
 `
 
 const clientIdFlagHelp = `
