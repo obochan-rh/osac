@@ -394,7 +394,7 @@
           "properties": {
             "endpoint": {
               "type": "string",
-              "description": "Vault API endpoint URL (e.g. http://openbao.openbao.svc.cluster.local:8200)"
+              "description": "Vault API endpoint URL. Supports Helm tpl so {{ .Release.Namespace }} expands to the install namespace (e.g. https://openbao.{{ .Release.Namespace }}.svc.cluster.local:8200). Leave empty to disable Vault integration."
             },
             "namespace": {
               "type": "string",
@@ -1485,17 +1485,28 @@
       "properties": {
         "enabled": {
           "type": "boolean",
-          "description": "Deploy a bundled OpenBao instance for development/CI use",
-          "default": false
+          "description": "Deploy a bundled OpenBao instance. Enabled by default — set to false only when pointing at an external Vault/OpenBao instance.",
+          "default": true
         },
         "devRootToken": {
           "type": "string",
-          "description": "Root token for OpenBao dev mode (required when enabled)"
+          "description": "Root token for OpenBao dev mode (required when enabled)",
+          "default": "dev-root-token"
         },
         "image": {
           "type": "string",
           "description": "OpenBao container image (must be 2.5+ for namespace support)",
           "default": "ghcr.io/openbao/openbao:2.6.1"
+        },
+        "podSecurityContext": {
+          "type": "object",
+          "description": "Pod-level securityContext for the OpenBao deployment. Leave absent (nil) to use the template's built-in standard-Kubernetes defaults (runAsNonRoot: true, runAsUser: 100, runAsGroup: 1000, fsGroup: 1000). Any non-nil value here FULLY REPLACES the template default — partial overrides must include every key you want rendered. On OpenShift with restricted-v2 SCC, set to {runAsNonRoot: true} only.",
+          "properties": {
+            "runAsNonRoot": { "type": "boolean" },
+            "runAsUser": { "type": "integer" },
+            "runAsGroup": { "type": "integer" },
+            "fsGroup": { "type": "integer" }
+          }
         },
         "resources": {
           "type": "object",

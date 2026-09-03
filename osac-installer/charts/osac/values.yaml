@@ -93,12 +93,24 @@ service:
     headers: false
     bodies: false
   vault:
+    # Vault API endpoint. When bundledVault.enabled is true, set this to the
+    # in-cluster OpenBao service URL for the install namespace. The deployment
+    # template applies tpl at render time, so {{ .Release.Namespace }} expands
+    # to the actual namespace — use that pattern in per-profile overrides.
+    # Leave empty to disable Vault integration (no --vault-endpoint flag is
+    # passed to the controller when endpoint is empty, even if credentials
+    # are configured).
     endpoint: ""
     namespace: osac
     kvMountPath: secret
     lifecycleRole: ""
     lifecycleMountPath: "jwt"
     keycloakClientId: ""
+    # Must match the issuer URL (iss claim) Keycloak puts in its JWT tokens.
+    # On OpenShift, Keycloak's KC_HOSTNAME is typically the external route URL
+    # (e.g. https://keycloak-keycloak.apps.<cluster>/realms/osac), NOT the
+    # internal service URL. Using the internal URL causes OIDC discovery issuer
+    # mismatch and vault bootstrap failure. Set this to the external route URL.
     keycloakIssuerUrl: ""
     keycloakAudience: "osac-api"
     caBundle:
@@ -329,9 +341,17 @@ hubAccess:
   enabled: false
 
 bundledVault:
-  enabled: false
-  devRootToken: ""
+  enabled: true
+  devRootToken: "dev-root-token"
   image: "ghcr.io/openbao/openbao:2.6.2"
+  # podSecurityContext: {}
+  # Leave absent (nil) to use the template's built-in standard-Kubernetes defaults
+  # (runAsNonRoot: true, runAsUser: 100, runAsGroup: 1000, fsGroup: 1000).
+  # On OpenShift with restricted-v2 SCC, set this to just {runAsNonRoot: true}
+  # in the profile's instance.yaml — the SCC allocates UIDs from the namespace
+  # UID range and resolves the named user automatically. Any non-nil value here
+  # FULLY REPLACES the template default (no Helm key-merge), so partial overrides
+  # must include every key you want rendered.
   resources:
     limits:
       cpu: 500m

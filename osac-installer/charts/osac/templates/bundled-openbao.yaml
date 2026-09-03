@@ -169,10 +169,19 @@ spec:
     spec:
       automountServiceAccountToken: false
       securityContext:
+        {{- if .Values.bundledVault.podSecurityContext }}
+        {{- toYaml .Values.bundledVault.podSecurityContext | nindent 8 }}
+        {{- else }}
+        # Standard Kubernetes default: explicit numeric UID required because the
+        # OpenBao image uses a named user ("openbao") — Kubernetes cannot satisfy
+        # runAsNonRoot: true without a numeric UID at admission time.
+        # On OpenShift, override podSecurityContext in the profile's instance.yaml
+        # to just {runAsNonRoot: true}; the restricted-v2 SCC allocates the UID.
         runAsNonRoot: true
         runAsUser: 100
         runAsGroup: 1000
         fsGroup: 1000
+        {{- end }}
       volumes:
       - name: server-cert
         secret:
@@ -193,6 +202,14 @@ spec:
       - name: data
         emptyDir: {}
       - name: tmp
+        emptyDir: {}
+      # home-openbao: writable home dir for the openbao user.
+      # The Alpine image sets HOME to / (no explicit home dir) while the UBI
+      # image uses /home/openbao. We map both by setting HOME=/tmp in each
+      # container's env and mounting this emptyDir there, so any HOME-relative
+      # writes (e.g. ~/.vault-token from bao CLI) land in an emptyDir rather
+      # than the read-only root filesystem.
+      - name: home
         emptyDir: {}
       containers:
       - name: server
@@ -225,6 +242,11 @@ spec:
           {{- end }}
         - name: SKIP_SETCAP
           value: "true"
+        # HOME=/tmp: the Alpine image has no explicit home dir; redirecting HOME
+        # to the already-mounted /tmp emptyDir prevents any HOME-relative writes
+        # from hitting the read-only root filesystem.
+        - name: HOME
+          value: "/tmp"
         volumeMounts:
         - name: server-cert
           mountPath: /vault/tls
@@ -238,6 +260,8 @@ spec:
           mountPath: /vault/data
         - name: tmp
           mountPath: /tmp
+        - name: home
+          mountPath: /home/openbao
         ports:
         - name: api
           protocol: TCP
@@ -283,6 +307,10 @@ spec:
           value: {{ .Values.service.vault.keycloakIssuerUrl | default "" | quote }}
         - name: KEYCLOAK_AUDIENCE
           value: {{ .Values.service.vault.keycloakAudience | default "" | quote }}
+        # HOME=/tmp: ensures HOME-relative writes (e.g. bao CLI token cache) land
+        # on the mounted /tmp emptyDir rather than the read-only root filesystem.
+        - name: HOME
+          value: "/tmp"
         volumeMounts:
         - name: init-script
           mountPath: /scripts
@@ -294,6 +322,8 @@ spec:
         {{- end }}
         - name: tmp
           mountPath: /tmp
+        - name: home
+          mountPath: /home/openbao
         resources:
           requests:
             cpu: 50m

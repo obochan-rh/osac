@@ -90,7 +90,10 @@ service:
   log:
     level: debug
   vault:
-    endpoint: "https://openbao.osac.svc.cluster.local:8200"
+    # tpl is applied to this value at render time — {{ .Release.Namespace }}
+    # expands to the actual install namespace, avoiding DNS failures when
+    # deploying with a non-default NS.
+    endpoint: "https://openbao.{{ .Release.Namespace }}.svc.cluster.local:8200"
     namespace: osac
     kvMountPath: secret
     lifecycleRole: lifecycle
@@ -183,3 +186,12 @@ lvms:
 # Uses fsync=off — data is lost on restart. Not for production.
 bundledPostgres:
   enabled: true
+
+# --- Bundled OpenBao (Vault-compatible secret store) ---
+bundledVault:
+  # Override podSecurityContext for OpenShift restricted-v2 SCC: omit numeric
+  # runAsUser/runAsGroup/fsGroup — the SCC allocates UIDs from the namespace UID
+  # range and resolves the named user automatically. A non-nil value here fully
+  # replaces the template default (runAsUser:100/runAsGroup:1000/fsGroup:1000).
+  podSecurityContext:
+    runAsNonRoot: true
