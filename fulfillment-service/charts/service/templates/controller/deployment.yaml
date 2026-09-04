@@ -12,9 +12,9 @@ specific language governing permissions and limitations under the License.
 */}}
 
 {{- $caBundleConfigMap := required "certs.caBundle.configMap is required" .Values.certs.caBundle.configMap }}
-{{- $authIssuerUrl := required "auth.issuerUrl is required" .Values.auth.issuerUrl }}
+{{- $authIssuerUrl := tpl (required "auth.issuerUrl is required" .Values.auth.issuerUrl) . }}
 {{- $authControllerCredentials := required "auth.controllerCredentials is required" .Values.auth.controllerCredentials }}
-{{- $idpUrl := required "idp.url is required" .Values.idp.url }}
+{{- $idpUrl := tpl (required "idp.url is required" .Values.idp.url) . }}
 {{- $idpCredentials := required "idp.credentials is required" .Values.idp.credentials }}
 
 apiVersion: apps/v1
@@ -176,14 +176,14 @@ spec:
         - --grpc-listener-tls-key=/etc/fulfillment-controller/tls/tls.key
         - --metrics-listener-address=0.0.0.0:8002
         {{- if and .Values.vault.endpoint .Values.vault.credentials }}
-        - --vault-endpoint={{ .Values.vault.endpoint }}
+        - --vault-endpoint={{ tpl .Values.vault.endpoint . }}
         - --vault-namespace={{ .Values.vault.namespace }}
         - --vault-kv-mount-path={{ .Values.vault.kvMountPath }}
         - --vault-lifecycle-role={{ .Values.vault.lifecycleRole }}
         - --vault-lifecycle-mount-path={{ .Values.vault.lifecycleMountPath }}
         - --vault-keycloak-client-id={{ .Values.vault.keycloakClientId }}
         - --vault-keycloak-client-secret-file=/etc/fulfillment-controller/vault/client-secret
-        - --vault-keycloak-issuer-url={{ .Values.vault.keycloakIssuerUrl }}
+        - --vault-keycloak-issuer-url={{ tpl .Values.vault.keycloakIssuerUrl . }}
         - --vault-keycloak-audience={{ .Values.vault.keycloakAudience }}
         {{- if .Values.vault.caBundle.configMap }}
         - --vault-ca-cert-file=/etc/fulfillment-controller/vault-cas/bundle.pem

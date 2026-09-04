@@ -4,6 +4,16 @@
   "description": "Configuration values for Open Sovereign AI Cloud deployment",
   "type": "object",
   "properties": {
+    "global": {
+      "type": "object",
+      "description": "Values propagated unchanged into every subchart, shared between the umbrella chart's own templates and its subcharts",
+      "properties": {
+        "clusterDomain": {
+          "type": "string",
+          "description": "OpenShift cluster ingress domain (e.g. apps.mycluster.example.com). Backs the tpl-templated defaults for service.auth.issuerUrl, service.idp.url, and service.vault.keycloakIssuerUrl. Set via --set global.clusterDomain=$(oc get ingresses.config/cluster -o jsonpath='{.spec.domain}'). Leave empty on platforms (e.g. kind) that set those three values explicitly instead."
+        }
+      }
+    },
     "cliImage": {
       "type": "string",
       "description": "Default OpenShift CLI image used by hook jobs"
@@ -421,7 +431,7 @@
             },
             "keycloakIssuerUrl": {
               "type": "string",
-              "description": "Keycloak OIDC issuer URL for configuring JWT auth in tenant Vault namespaces"
+              "description": "Keycloak OIDC issuer URL for configuring JWT auth in tenant Vault namespaces. Supports Helm tpl -- defaults to a global.clusterDomain-backed external route URL matching Keycloak's actual OIDC issuer on OpenShift. Must match the issuer (iss claim) Keycloak puts in its JWT tokens, or OIDC discovery validation fails."
             },
             "keycloakAudience": {
               "type": "string",

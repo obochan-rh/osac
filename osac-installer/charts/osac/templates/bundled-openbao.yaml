@@ -304,7 +304,7 @@ spec:
           value: "/vault/tls/ca.crt"
           {{- end }}
         - name: KEYCLOAK_ISSUER_URL
-          value: {{ .Values.service.vault.keycloakIssuerUrl | default "" | quote }}
+          value: {{ tpl (.Values.service.vault.keycloakIssuerUrl | default "") . | quote }}
         - name: KEYCLOAK_AUDIENCE
           value: {{ .Values.service.vault.keycloakAudience | default "" | quote }}
         # HOME=/tmp: ensures HOME-relative writes (e.g. bao CLI token cache) land

@@ -43,7 +43,9 @@ service:
     caBundle:
       configMap: ca-bundle
   auth:
-    issuerUrl: https://keycloak.keycloak.svc.cluster.local/realms/osac
+    # issuerUrl defaults to a global.clusterDomain-backed external route URL
+    # (see charts/osac/values.yaml) -- correct automatically once
+    # install-osac sets --set global.clusterDomain=$(DOMAIN).
     emergencyServiceAccounts:
     - admin
     - osac-operator
@@ -60,7 +62,9 @@ service:
           param: client-secret
   idp:
     provider: keycloak
-    url: https://keycloak.keycloak.svc.cluster.local
+    # url defaults to a global.clusterDomain-backed external route URL (see
+    # charts/osac/values.yaml) -- correct automatically once install-osac
+    # sets --set global.clusterDomain=$(DOMAIN).
     credentials:
     - secret:
         name: fulfillment-controller-credentials
@@ -88,16 +92,13 @@ service:
   log:
     level: debug
   vault:
-    # tpl is applied to this value at render time — {{ .Release.Namespace }}
-    # expands to the actual install namespace. caas-ci installs with
-    # NS=osac-e2e-ci; the old hardcoded "osac" endpoint caused DNS failures.
-    endpoint: "https://openbao.{{ .Release.Namespace }}.svc.cluster.local:8200"
+    # endpoint and keycloakIssuerUrl both default correctly (see
+    # charts/osac/values.yaml) -- no override needed.
     namespace: osac
     kvMountPath: secret
     lifecycleRole: lifecycle
     lifecycleMountPath: jwt
     keycloakClientId: osac-controller
-    keycloakIssuerUrl: "https://keycloak.keycloak.svc.cluster.local/realms/osac"
     keycloakAudience: osac-api
     caBundle:
       configMap: ca-bundle
