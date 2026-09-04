@@ -36,4 +36,3 @@ bundledPostgres:
   database:
     name: service
     user: service
-

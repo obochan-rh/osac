@@ -40,4 +40,3 @@ bundledPostgres:
   enabled: true
   database:
     name: service
-
