@@ -189,7 +189,7 @@ static_resources:
           "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
           common_tls_context:
             alpn_protocols:
-            - http1.1
+            - http/1.1
             - h2
             tls_certificates:
             - certificate_chain:
@@ -312,7 +312,7 @@ static_resources:
           "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
           common_tls_context:
             alpn_protocols:
-            - http1.1
+            - http/1.1
             - h2
             tls_certificates:
             - certificate_chain:
