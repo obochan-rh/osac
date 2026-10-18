@@ -400,6 +400,8 @@ spec:
             secretKeyRef:
               name: keycloak-admin-credentials
               key: admin-password
+        - name: REALM_UI_BASE_URL
+          value: {{ .Values.keycloak.uiBaseUrl | quote }}
         volumeMounts:
         - name: scripts
           mountPath: /scripts

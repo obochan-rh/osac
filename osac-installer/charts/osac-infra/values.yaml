@@ -42,6 +42,11 @@ keycloak:
   enabled: true
   realmOverwrite: true
   hostname: "keycloak.keycloak.svc.cluster.local"
+  # External origin of the osac-ui deployment (e.g.
+  # https://osac-ui-osac.apps.example.com), seeded into the realm's
+  # osac-ui client as rootUrl, redirect URIs, and web origins. Empty
+  # keeps the local development default (http://ui.osac.localhost:8080).
+  uiBaseUrl: ""
   adminUsername: admin
   adminPassword: admin
   defaultUserPassword: foobar

@@ -53,6 +53,12 @@ UI_BACKEND_SECRET=$(oc get secret "${SECRET_NAME}" -n "${NAMESPACE}" -o jsonpath
 REALM_ADMIN_USERNAME="${REALM_ADMIN_USERNAME:-admin}"
 REALM_ADMIN_PASSWORD="${REALM_ADMIN_PASSWORD:?REALM_ADMIN_PASSWORD must be set}"
 
+# The osac-ui client's external origin, substituted into the realm seed.
+# Defaults to the local development origin used by Kind and CI. Like the
+# admin credentials, it is a user-supplied Helm value landing in JSON
+# string values, so it gets the same two escaping passes in the sed below.
+UI_BASE_URL="${REALM_UI_BASE_URL:-http://ui.osac.localhost:8080}"
+
 # REALM_ADMIN_USERNAME/PASSWORD are user-supplied Helm values (unlike the
 # auto-generated base64 client secrets above) substituted into JSON string
 # values, so each needs two escaping passes: first full JSON string escaping
@@ -76,6 +82,7 @@ sed \
     -e "s#__OSAC_UI_BACKEND_CLIENT_SECRET__#${UI_BACKEND_SECRET}#" \
     -e "s#__OSAC_REALM_ADMIN_USERNAME__#$(escape_sed_replacement "$(json_escape_string "${REALM_ADMIN_USERNAME}")")#" \
     -e "s#__OSAC_REALM_ADMIN_PASSWORD__#$(escape_sed_replacement "$(json_escape_string "${REALM_ADMIN_PASSWORD}")")#" \
+    -e "s#__OSAC_UI_BASE_URL__#$(escape_sed_replacement "$(json_escape_string "${UI_BASE_URL}")")#" \
     "${RAW_REALM}" > "${RESOLVED_REALM}"
 
 echo "Realm secrets resolved -> ${RESOLVED_REALM}"
