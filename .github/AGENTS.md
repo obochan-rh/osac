@@ -27,6 +27,10 @@ plus a native approval on the head commit, and the merge queue.
   `tests/e2e` back into an ignore list.
 - No Prow labels (`/lgtm`, `/approve`, `/hold`, `/e2e-ready`, `/ok-to-test`) are read. Prow still sets `jira/valid-reference`
   (the `jira-reference` check reads it) and runs the cherry-pick plugin.
+- The one comment command is `/test` (alone: the suites the change needs; `/test vmaas caas`: those suites), read by
+  `e2e-pr.yml` through the shared decision for members of the organization. The old slash-command workflow (`/test <workflow>`,
+  `/retest`, `/cancel`, `optional-workflows.yml`) is gone: re-run a check from its page, and start Netris with `/test netris`.
+  A pull request from someone outside the organization needs the `ok-to-test` label added by a person with triage access.
 
 ## Dependency updates and who may change the pipeline
 
