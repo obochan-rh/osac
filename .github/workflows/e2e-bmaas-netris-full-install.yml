@@ -1,12 +1,12 @@
 ---
 # The BMaaS Netris full-install test as a suite of the pull request flow: a real Netris lab on an AWS box, so it is slow and
 # expensive and never chosen automatically (the policy marks it manual_only). A member of the organization starts it by
-# checking its box in the comment of the pull request (osac-ci docs/RULES.md, "Starting suites by hand"); e2e-pr.yml calls
+# commenting `/test netris` on the pull request, or checking its box in the comment the decision keeps there (osac-ci
+# docs/RULES.md, "Starting suites by hand"); e2e-pr.yml calls
 # this workflow for the commit that was asked for, and its line on the pull request is E2E / BMaaS Netris Full Install. It
 # does not hold the E2E check: that check is the sum of the suites the change needs (VMaaS, CaaS, BMaaS).
 #
-# Other ways to start it are unchanged: the comment `/test e2e-bmaas-netris-full-install` (optional-workflows.yml) and the
-# "Run workflow" button of e2e-bmaas-netris-full-install-caller.yml.
+# The "Run workflow" button of e2e-bmaas-netris-full-install-caller.yml still works.
 name: E2E BMaaS Netris Full Install
 
 permissions:
