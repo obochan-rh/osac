@@ -101,4 +101,31 @@ run_without_remote_kubeconfig "${delete_playbook}" \
 run_ansible_playbook targets/storage_target_routing/tasks/verify.yml \
   "${routing_vars[@]}" -e routing_test_management_count=1 -e routing_test_workload_count=0
 
+echo "Checking compute-instance JIT storage routing..."
+run_ansible_playbook targets/storage_target_routing/tasks/cleanup.yml "${routing_vars[@]}"
+computeinstance_fixture="fixtures/storage/computeinstance-storage-routing-test.yaml"
+compute_playbook="${AAP_ROOT}/playbook_osac_create_compute_instance.yml"
+# Keep the template role from creating a real VM/DataVolume: baseline.yml in
+# targets/compute_instance_create uses the same noop overrides. Pass each as
+# JSON so the variable lands as a dict -- the step includes dereference
+# .name/.tasks_from on it.
+compute_jit_overrides=(
+  -e '{"create_step_resources_override":{"name":"osac.workflows.workflow_helpers","tasks_from":"noop.yml"}}'
+  -e '{"create_step_wait_annotate_override":{"name":"osac.workflows.workflow_helpers","tasks_from":"noop.yml"}}'
+)
+
+echo "  split-cluster: JIT StorageClass must land on the workload cluster"
+OSAC_REMOTE_CLUSTER_KUBECONFIG="${TARGET_KUBECONFIG}" run_ansible_playbook "${compute_playbook}" \
+  -e "@${computeinstance_fixture}" "${routing_vars[@]}" "${compute_jit_overrides[@]}"
+run_ansible_playbook targets/storage_target_routing/tasks/verify.yml \
+  "${routing_vars[@]}" -e routing_test_management_count=0 -e routing_test_workload_count=1
+
+echo "  single-cluster fallback: JIT StorageClass stays on the management cluster"
+run_ansible_playbook targets/storage_target_routing/tasks/cleanup.yml "${routing_vars[@]}"
+run_without_remote_kubeconfig "${compute_playbook}" \
+  -e "@${computeinstance_fixture}" "${routing_vars[@]}" "${compute_jit_overrides[@]}"
+run_ansible_playbook targets/storage_target_routing/tasks/verify.yml \
+  "${routing_vars[@]}" -e routing_test_management_count=1 -e routing_test_workload_count=0
+run_ansible_playbook targets/storage_target_routing/tasks/cleanup.yml "${routing_vars[@]}"
+
 echo "Storage target routing integration checks passed."

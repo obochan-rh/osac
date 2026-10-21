@@ -73,6 +73,12 @@
               JIT storage provisioning will be skipped.
           when: _jit_storage_tiers | length == 0
 
+    - name: Get configured remote cluster kubeconfig for JIT storage
+      when: _jit_storage_tiers is defined and _jit_storage_tiers | length > 0
+      ansible.builtin.include_role:
+        name: osac.service.common
+        tasks_from: get_remote_cluster_kubeconfig
+
     - name: Ensure storage is provisioned for tenant (JIT)
       when: _jit_storage_tiers is defined and _jit_storage_tiers | length > 0
       ansible.builtin.include_role:
@@ -83,6 +89,13 @@
         storage_provider_backend_connections: "{{ osac_job_vars.storage_backend_connections | default({}) }}"
         storage_provider_provisioning_target: vmaas
         storage_provider_block_encryption_passphrase: "{{ osac_job_vars.resource.spec.blockEncryptionPassphrase | default('') }}"
+        # JIT StorageClasses must land where the VM will run: ocp_virt_vm
+        # resolves the same remote_cluster_kubeconfig fact, so both target
+        # the same cluster. Without this the storage_provider k8s tasks use
+        # the execution environment's default (management) context, the SC
+        # "already exists" there, and the VM's PVC on the workload cluster
+        # can never bind. Mirrors the Tenant routing fixed in OSAC-5831.
+        storage_provider_target_kubeconfig: "{{ remote_cluster_kubeconfig | default(omit) }}"
 
     - name: Add JIT-provisioned StorageClasses to resolution list
       ansible.builtin.set_fact:

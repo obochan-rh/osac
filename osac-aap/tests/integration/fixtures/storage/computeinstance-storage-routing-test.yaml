@@ -1,0 +1,33 @@
+osac_job_vars:
+  resource:
+    apiVersion: osac.openshift.io/v1alpha1
+    kind: ComputeInstance
+    metadata:
+      name: test-vm
+      namespace: osac-system
+      uid: compute-instance-storage-routing-test
+      annotations:
+        osac.openshift.io/subnet-target-namespace: test-subnet
+    spec:
+      templateID: osac.templates.ocp_virt_vm
+      networkAttachments:
+        - subnetRef: test-subnet
+      vcpus: 2
+      memoryGiB: 4
+      bootDisk:
+        sizeGiB: 20
+        storageTier: fast
+      image:
+        sourceType: registry
+        sourceRef: "quay.io/containerdisks/fedora:latest"
+      runStrategy: "Always"
+    status:
+      desiredConfigVersion: "1"
+      tenantReference:
+        name: "{{ routing_test_tenant_name }}"
+        namespace: osac-system
+  storage_tier_definitions:
+    - name: fast
+      protocol: block
+      provider: lvms
+  storage_backend_connections: {}
