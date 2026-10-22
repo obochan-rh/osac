@@ -310,19 +310,8 @@ aap:
       config:
         NETWORK_CLASS: ""
         NETWORK_STEPS_COLLECTION: ""
-        DNS_CLASS: ""
+        DNS_CLASS: "dns.route53.dns"
         DNS_ZONE: ""
-        # Netris connection fields below must also be set on networkFulfillment
-        # (including NETRIS_PASSWORD); there is no shared Netris config block.
-        NETRIS_CONTROLLER_URL: ""
-        NETRIS_VALIDATE_CERTS: "true"
-        NETRIS_USERNAME: ""
-        NETRIS_SITE_ID: ""
-        NETRIS_TENANT_ID: ""
-        NETRIS_TENANT_NAME: ""
-        NETRIS_MGMT_VPC_ID: ""
-        NETRIS_MGMT_VPC_NAME: ""
-        NETRIS_RESOURCE_CLASS_MAP: ""
         SERVER_SSH_BASTION_HOST: ""
         SERVER_SSH_BASTION_USER: ""
         SERVER_SSH_USER: ""
@@ -336,23 +325,14 @@ aap:
         HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY: ""
         PARKING_VNET_NAME: ""
       secret:
-        NETRIS_PASSWORD: ""
         AWS_ACCESS_KEY_ID: ""
         AWS_SECRET_ACCESS_KEY: ""
         SERVER_SSH_KEY: ""
         SERVER_SSH_BASTION_KEY: ""
     networkFulfillment:
       enabled: false
-      config:
-        # Duplicate of clusterFulfillment Netris connection fields — set both.
-        NETRIS_CONTROLLER_URL: ""
-        NETRIS_VALIDATE_CERTS: "true"
-        NETRIS_USERNAME: ""
-        NETRIS_SITE_ID: ""
-        NETRIS_TENANT_ID: ""
-        NETRIS_TENANT_NAME: ""
-      secret:
-        NETRIS_PASSWORD: ""
+      config: {}
+      secret: {}
     storageFulfillment:
       enabled: false
       config:
@@ -422,6 +402,8 @@ bmf:
     inventoryConfig: "osac-inventory-config"
     managementConfig: "osac-management-config"
     osClouds: "osac-os-clouds"
+    netboxToken: "osac-netbox-token"
+    netboxCA: "osac-netbox-ca"
   # Kind/IT only -- see templates/bmf-metal3-test-secrets.yaml
   testBackend:
     metal3:
@@ -448,8 +430,24 @@ bmf:
     insecureSkipVerify: false
     hostClass: "bcm"
     bmhNamespace: ""
+  secretAPI:
+    url: "https://fulfillment-internal-api:8001"
+    # Keep aligned with service.auth.issuerUrl; tpl resolves the cluster domain at render time.
+    issuerUrl: "https://keycloak-keycloak.{{ .Values.global.clusterDomain }}/realms/osac"
+    caBundle:
+      configMap: "ca-bundle"
+      key: "bundle.pem"
+  netbox:
+    enabled: false
+    bmhNamespace: ""
+    url: ""
+    tokenSecretKey: "token"
+    tokenValue: ""
+    caCert: ""
+    allowInsecureHTTP: false
   metal3:
     enabled: false
+    # Namespace where Metal3 inventory reads BareMetalHost resources.
     namespace: ""
     hostClass: "metal3"
 

@@ -1,13 +1,14 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Dropdown, DropdownItem, DropdownList, MenuToggle } from '@patternfly/react-core';
 import { EllipsisVIcon } from '@patternfly/react-icons/dist/esm/icons/ellipsis-v-icon';
 
-import type { BareMetalInstance } from '@osac/types';
+import { BareMetalInstance } from '@osac/types';
 import DeleteResourceButton from '@osac/ui-components/components/Resource/DeleteResourceButton';
 
-import BareMetalDeleteConfirmModal from './BareMetalDeleteConfirmModal';
-import { useBareMetalActions } from './useBareMetalActions';
-import { useTranslation } from '../../hooks/useTranslation';
+import { useTranslation } from '../../../hooks/useTranslation';
+import BareMetalDeleteConfirmModal from '../BareMetalDeleteConfirmModal';
+import { useBareMetalActions } from '../useBareMetalActions';
 
 interface BareMetalActionsMenuProps {
   instance: BareMetalInstance;
@@ -50,6 +51,12 @@ export const BareMetalActionsMenu = ({ instance, onDeleted }: BareMetalActionsMe
         popperProps={{ position: 'right' }}
       >
         <DropdownList>
+          <DropdownItem
+            component={(props) => <Link {...props} to={`/bare-metal/${instance.id}`} />}
+            onClick={() => setOpen(false)}
+          >
+            {t('View details')}
+          </DropdownItem>
           <DropdownItem
             isDisabled={!canStart}
             onClick={() => {

@@ -1348,9 +1348,9 @@
                     },
                     "DNS_CLASS": {
                       "type": "string",
-                      "description": "Fully-qualified Ansible role name of the DNS driver. Only dns.route53.dns is shipped today; leave empty to use that default.",
+                      "description": "Fully-qualified Ansible role name of the DNS driver. dns.route53.dns manages Route 53 records; dns.noop.dns skips external DNS for environments that do not manage DNS records.",
                       "enum": [
-                        "",
+                        "dns.noop.dns",
                         "dns.route53.dns"
                       ]
                     },
@@ -1428,18 +1428,6 @@
                       "type": "string",
                       "description": "Name of the parking V-Net where idle CaaS agents sit before cluster assignment (effective default: idle-agents-network)"
                     },
-                    "NETRIS_CONTROLLER_URL": {
-                      "type": "string",
-                      "description": "Netris controller API endpoint URL"
-                    },
-                    "NETRIS_VALIDATE_CERTS": {
-                      "type": "string",
-                      "enum": [
-                        "true",
-                        "false"
-                      ],
-                      "description": "Verify Netris HTTPS certificates; defaults to enabled"
-                    },
                     "NETRIS_SITE_ID": {
                       "type": "string",
                       "description": "Netris site identifier"
@@ -1465,7 +1453,7 @@
                   "properties": {
                     "NETRIS_PASSWORD": {
                       "type": "string",
-                      "description": "Netris controller password. Must be set identically on clusterFulfillment.secret and networkFulfillment.secret; there is no shared Netris config block."
+                      "description": "Expert override for the Netris controller password. Normal deployments should use global.networking.netris.credentials."
                     },
                     "AWS_ACCESS_KEY_ID": {
                       "type": "string",
@@ -1513,7 +1501,7 @@
                   "properties": {
                     "NETRIS_PASSWORD": {
                       "type": "string",
-                      "description": "Netris controller password. Must be set identically on clusterFulfillment.secret and networkFulfillment.secret; there is no shared Netris config block."
+                      "description": "Expert override for the Netris controller password. Normal deployments should use global.networking.netris.credentials."
                     }
                   },
                   "additionalProperties": false
@@ -2012,6 +2000,16 @@
               "description": "Secret name for OpenStack clouds.yaml",
               "default": "osac-os-clouds"
             },
+            "netboxToken": {
+              "type": "string",
+              "description": "Name of the NetBox API token Secret. The chart uses it if present in the BMF release namespace; otherwise it creates it from bmf.netbox.tokenValue.",
+              "default": "osac-netbox-token"
+            },
+            "netboxCA": {
+              "type": "string",
+              "description": "Secret name for the optional NetBox CA certificate",
+              "default": "osac-netbox-ca"
+            },
             "bcmCerts": {
               "type": "string",
               "description": "Secret name for BCM mTLS client certificates"
@@ -2140,18 +2138,96 @@
           },
           "additionalProperties": false
         },
-        "metal3": {
+        "secretAPI": {
           "type": "object",
-          "description": "Metal3 inventory and management backend configuration. When enabled, creates osac-inventory-config and osac-management-config Secrets.",
+          "description": "Secret API connection settings for the BMF operator.",
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "Fulfillment Secret API endpoint.",
+              "default": "https://fulfillment-internal-api:8001"
+            },
+            "issuerUrl": {
+              "type": "string",
+              "description": "OIDC issuer for the BMF Keycloak service client; must match service.auth.issuerUrl.",
+              "default": "https://keycloak-keycloak.{{ .Values.global.clusterDomain }}/realms/osac",
+              "pattern": "^https://([^/\\s]+|[^/]*\\{\\{[^}]+\\}\\})"
+            },
+            "caBundle": {
+              "type": "object",
+              "description": "Optional CA bundle used to verify the Secret API endpoint.",
+              "properties": {
+                "configMap": {
+                  "type": "string",
+                  "description": "ConfigMap containing the Secret API CA bundle.",
+                  "default": "ca-bundle"
+                },
+                "key": {
+                  "type": "string",
+                  "description": "Key containing the Secret API CA bundle.",
+                  "default": "bundle.pem"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "netbox": {
+          "type": "object",
+          "description": "NetBox inventory configuration. bmhNamespace supplies the namespace for Metal3 BMH management and the namespaced BMC Secret Role.",
           "properties": {
             "enabled": {
               "type": "boolean",
-              "description": "Create Metal3 inventory and management config Secrets",
+              "description": "Select NetBox as the BMF inventory backend.",
+              "default": false
+            },
+            "bmhNamespace": {
+              "type": "string",
+              "description": "Namespace containing Metal3 BareMetalHosts and their BMC credential Secrets. Used by Metal3 management and the BMF namespaced Secret Role when NetBox is enabled.",
+              "default": ""
+            },
+            "url": {
+              "type": "string",
+              "description": "NetBox API endpoint URL.",
+              "default": ""
+            },
+            "tokenSecretKey": {
+              "type": "string",
+              "description": "Key within the NetBox token Secret containing the API token.",
+              "pattern": "^[A-Za-z0-9._-]+$",
+              "default": "token"
+            },
+            "tokenValue": {
+              "type": "string",
+              "description": "NetBox API token stored under tokenSecretKey when the named Secret does not already exist.",
+              "default": ""
+            },
+            "caCert": {
+              "type": "string",
+              "description": "Optional PEM CA certificate for the NetBox endpoint, stored in a separate Kubernetes Secret.",
+              "default": ""
+            },
+            "allowInsecureHTTP": {
+              "type": "boolean",
+              "description": "Allow NetBox endpoint URLs using HTTP.",
+              "default": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "metal3": {
+          "type": "object",
+          "description": "Metal3 inventory configuration.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Select Metal3 as the BMF inventory backend.",
               "default": false
             },
             "namespace": {
               "type": "string",
-              "description": "Kubernetes namespace where BareMetalHost CRs are located"
+              "description": "Kubernetes namespace where BareMetalHost CRs are located when Metal3 is the inventory backend."
             },
             "hostClass": {
               "type": "string",
@@ -2890,18 +2966,8 @@
     },
     "aapNetrisConfig": {
       "type": "object",
-      "description": "Shared Netris properties composed into AAP instance group config objects via allOf. Do not set additionalProperties here — the consuming schema controls that.",
+      "description": "Shared expert-overridable Netris identity properties composed into AAP instance group config objects via allOf. Installation-owned URL, TLS validation, and CA path settings are intentionally excluded. Do not set additionalProperties here; the consuming schema controls that.",
       "properties": {
-        "NETRIS_CONTROLLER_URL": {
-          "type": "string",
-          "pattern": "^$|^https://[^/\\s:]+(:[0-9]+)?(/[^\\s]*)?$",
-          "description": "Netris controller API URL. Must match between AAP instance groups."
-        },
-        "NETRIS_VALIDATE_CERTS": {
-          "type": "string",
-          "enum": ["true", "false"],
-          "description": "Verify Netris HTTPS certificates; defaults to enabled."
-        },
         "NETRIS_USERNAME": {
           "type": "string",
           "description": "Netris controller username. Must match between AAP instance groups."

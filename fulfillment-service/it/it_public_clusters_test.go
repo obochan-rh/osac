@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2/dsl/core"
+	. "github.com/onsi/ginkgo/v2/dsl/table"
 	. "github.com/onsi/gomega"
 	grpccodes "google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
@@ -44,7 +45,7 @@ var _ = Describe("Public clusters", func() {
 		ctx = context.Background()
 		// Public cluster requests validate the canonical networking Hub even when
 		// the request does not specify a subnet or SecurityGroup.
-		networkClassID = getOrCreateTenantDefaultNetworkClassFixture(ctx)
+		networkClassID, _ = getOrCreateTenantDefaultNetworkClassFixture(ctx)
 
 		// Create the clients:
 		clustersClient = publicv1.NewClustersClient(tool.ExternalView().UserConn())
@@ -60,7 +61,7 @@ var _ = Describe("Public clusters", func() {
 				}.Build(),
 				Spec: privatev1.BareMetalInstanceTypeSpec_builder{
 					Hardware: privatev1.BareMetalHardwareSpec_builder{
-						Cpu:    privatev1.BareMetalCPUSpec_builder{Cores: 32, Architecture: "x86_64", ThreadsPerCore: 2}.Build(),
+						Cpu:    privatev1.BareMetalCPUSpec_builder{Cores: 32, Architecture: "amd64", ThreadsPerCore: 2}.Build(),
 						Memory: privatev1.BareMetalMemorySpec_builder{TotalGb: 128}.Build(),
 						NetworkPorts: []*privatev1.BareMetalNetworkPortSpec{
 							privatev1.BareMetalNetworkPortSpec_builder{
@@ -175,6 +176,45 @@ var _ = Describe("Public clusters", func() {
 		Expect(items).ToNot(BeNil())
 	})
 
+	DescribeTable("rejects shared tenant creation by an administrator without persisting a cluster",
+		func(tenant string) {
+			// Use an administrator so assignable-tenant authorization cannot mask
+			// the resource type's reserved-tenant restriction. An omitted tenant
+			// must also be rejected: administrators default to shared.
+			adminClient := publicv1.NewClustersClient(tool.ExternalView().AdminConn())
+			name := fmt.Sprintf("shared-cluster-%s", uuid.New()[24:32])
+			request := publicv1.ClustersCreateRequest_builder{
+				Object: publicv1.Cluster_builder{
+					Metadata: publicv1.Metadata_builder{Name: name, Tenant: tenant}.Build(),
+					Spec: publicv1.ClusterSpec_builder{
+						Template: publicv1.ClusterTemplateReference_builder{Id: templateId, Shared: true}.Build(),
+						NodeSets: testClusterNodeSets(bmitName, 1),
+					}.Build(),
+				}.Build(),
+			}.Build()
+			original := proto.Clone(request)
+			response, err := adminClient.Create(ctx, request)
+			if response.GetObject().GetId() != "" {
+				DeferCleanup(func() {
+					_, err := adminClient.Delete(ctx, publicv1.ClustersDeleteRequest_builder{Id: response.GetObject().GetId()}.Build())
+					Expect(err).ToNot(HaveOccurred())
+				})
+			}
+			Expect(grpcstatus.Code(err)).To(Equal(grpccodes.PermissionDenied))
+			Expect(grpcstatus.Convert(err).Message()).To(Equal("objects cannot be placed in the 'shared' tenant"))
+			Expect(response).To(BeNil())
+			Expect(proto.Equal(request, original)).To(BeTrue())
+			listed, err := adminClient.List(ctx, publicv1.ClustersListRequest_builder{
+				Filter: new(fmt.Sprintf("this.metadata.name == %q", name)),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(listed.GetItems()).To(BeEmpty())
+			Expect(listed.GetTotal()).To(BeZero())
+		},
+		Entry("explicit shared tenant", "shared"),
+		Entry("omitted tenant defaults to shared", ""),
+	)
+
 	It("Can create a cluster", func() {
 		// Create the cluster:
 		response, err := clustersClient.Create(ctx, publicv1.ClustersCreateRequest_builder{
@@ -202,6 +242,7 @@ var _ = Describe("Public clusters", func() {
 		Expect(object).ToNot(BeNil())
 		metadata := object.GetMetadata()
 		Expect(metadata).ToNot(BeNil())
+		Expect(metadata.GetTenant()).To(Equal(usersGroup))
 		Expect(metadata.HasCreationTimestamp()).To(BeTrue())
 		Expect(metadata.HasDeletionTimestamp()).To(BeFalse())
 		spec := object.GetSpec()
@@ -284,9 +325,34 @@ var _ = Describe("Public clusters", func() {
 		}.Build())
 		Expect(err).NotTo(HaveOccurred())
 		object := createResponse.GetObject()
-		DeferCleanup(func() {
-			_, err := clustersClient.Delete(ctx, publicv1.ClustersDeleteRequest_builder{Id: object.GetId()}.Build())
-			Expect(err).NotTo(HaveOccurred())
+		privateClustersClient := privatev1.NewClustersClient(tool.InternalView().AdminConn())
+		DeferCleanup(func(cleanupCtx context.Context) {
+			cleanupErr := cleanupNetworkFixtureResource(cleanupCtx,
+				func(ctx context.Context) error {
+					_, err := clustersClient.Delete(ctx, publicv1.ClustersDeleteRequest_builder{Id: object.GetId()}.Build())
+					return err
+				},
+				func(ctx context.Context) (*privatev1.Metadata, error) {
+					response, err := privateClustersClient.Get(ctx, privatev1.ClustersGetRequest_builder{Id: object.GetId()}.Build())
+					if err != nil {
+						return nil, err
+					}
+					return response.GetObject().GetMetadata(), nil
+				},
+				func(ctx context.Context) error {
+					response, err := privateClustersClient.Get(ctx, privatev1.ClustersGetRequest_builder{Id: object.GetId()}.Build())
+					if err != nil {
+						return err
+					}
+					cluster := response.GetObject()
+					cluster.GetMetadata().SetFinalizers(nil)
+					_, err = privateClustersClient.Update(ctx, privatev1.ClustersUpdateRequest_builder{
+						Object: cluster, UpdateMask: catalogItemUpdateMask("metadata.finalizers"), Lock: true,
+					}.Build())
+					return err
+				},
+			)
+			Expect(cleanupErr).NotTo(HaveOccurred())
 		})
 
 		originalAttachment := proto.Clone(object.GetSpec().GetNetworkAttachment()).(*publicv1.ClusterNetworkAttachment)
@@ -468,11 +534,33 @@ var _ = Describe("Public clusters", func() {
 		}.Build())
 		Expect(err).ToNot(HaveOccurred())
 		object := createResponse.GetObject()
-		DeferCleanup(func() {
-			_, err := clustersClient.Delete(ctx, publicv1.ClustersDeleteRequest_builder{
-				Id: object.GetId(),
-			}.Build())
-			Expect(err).ToNot(HaveOccurred())
+		privateClustersClient := privatev1.NewClustersClient(tool.InternalView().AdminConn())
+		DeferCleanup(func(cleanupCtx context.Context) {
+			cleanupErr := cleanupNetworkFixtureResource(cleanupCtx,
+				func(ctx context.Context) error {
+					_, err := clustersClient.Delete(ctx, publicv1.ClustersDeleteRequest_builder{Id: object.GetId()}.Build())
+					return err
+				},
+				func(ctx context.Context) (*privatev1.Metadata, error) {
+					response, err := privateClustersClient.Get(ctx, privatev1.ClustersGetRequest_builder{Id: object.GetId()}.Build())
+					if err != nil {
+						return nil, err
+					}
+					return response.GetObject().GetMetadata(), nil
+				},
+				func(ctx context.Context) error {
+					response, err := privateClustersClient.Get(ctx, privatev1.ClustersGetRequest_builder{Id: object.GetId()}.Build())
+					if err != nil {
+						return err
+					}
+					cluster := response.GetObject()
+					cluster.GetMetadata().SetFinalizers(nil)
+					_, err = privateClustersClient.Update(ctx, privatev1.ClustersUpdateRequest_builder{
+						Object: cluster, UpdateMask: catalogItemUpdateMask("metadata.finalizers"), Lock: true,
+					}.Build())
+					return err
+				})
+			Expect(cleanupErr).NotTo(HaveOccurred())
 		})
 
 		// Verify the cluster has the correct version:
