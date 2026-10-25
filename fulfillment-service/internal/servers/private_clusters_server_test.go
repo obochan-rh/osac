@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -796,6 +797,9 @@ var _ = Describe("Private clusters server", func() {
 			object := response.GetObject()
 			Expect(object).ToNot(BeNil())
 			Expect(object.GetId()).ToNot(BeEmpty())
+			Expect(object.GetStatus().GetObservedCpVersion()).To(Equal("4.17.0"))
+			Expect(object.GetStatus().GetNodeSets()["compute"].GetObservedVersion()).To(Equal("4.17.0"))
+			Expect(object.GetStatus().GetNodeSets()["gpu"].GetObservedVersion()).To(Equal("4.17.0"))
 
 			// Verify that the node sets inherited from the template carry the canonicalized
 			// bare metal instance type references:
@@ -1038,6 +1042,130 @@ var _ = Describe("Private clusters server", func() {
 			Expect(ids).To(ConsistOf(first.GetId(), second.GetId(), dependency.GetId()))
 		})
 
+		It("rejects cluster creation when the expanded dependency closure exceeds the operator limit", func() {
+			dependency := newTestAddOnOperator("operator-expansion-limit-dependency", "operator-expansion-limit-dependency", true)
+			dependencyIDs := make([]string, 0, maxClusterAddOnOperators-1)
+			for i := range maxClusterAddOnOperators - 1 {
+				dependencyID := fmt.Sprintf("operator-expansion-limit-leaf-%d", i)
+				seedAddOnOperatorObject(ctx, newTestAddOnOperator(dependencyID, dependencyID, true))
+				dependencyIDs = append(dependencyIDs, dependencyID)
+			}
+			seedAddOnOperatorObject(ctx, dependency)
+
+			root := newTestAddOnOperator("operator-expansion-limit-root", "operator-expansion-limit-root", true)
+			root.SetDependencies([]*privatev1.AddOnOperatorLocalReference{
+				privatev1.AddOnOperatorLocalReference_builder{Id: dependency.GetId()}.Build(),
+			})
+			seedAddOnOperatorObject(ctx, root)
+
+			operatorServer, err := NewPrivateAddOnOperatorsServer().
+				SetLogger(logger).
+				SetAttributionLogic(attribution).
+				SetTenancyLogic(tenancy).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+			dependencies := make([]*privatev1.AddOnOperatorLocalReference, 0, len(dependencyIDs))
+			for _, dependencyID := range dependencyIDs {
+				dependencies = append(dependencies,
+					privatev1.AddOnOperatorLocalReference_builder{Id: dependencyID}.Build())
+			}
+			_, err = operatorServer.Update(ctx, privatev1.AddOnOperatorsUpdateRequest_builder{
+				Object: privatev1.AddOnOperator_builder{
+					Id:           dependency.GetId(),
+					Dependencies: dependencies,
+				}.Build(),
+				UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"dependencies"}},
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+
+			_, err = createClusterWithAddOnOperators(ctx, server, []*privatev1.AddOnOperatorReference{
+				privatev1.AddOnOperatorReference_builder{Id: root.GetId()}.Build(),
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("maximum of 32 operators"))
+		})
+
+		It("allows requested roots that overlap the dependency closure", func() {
+			rootIDs := make([]string, 0, maxClusterAddOnOperators)
+			for i := range maxClusterAddOnOperators {
+				operatorID := fmt.Sprintf("operator-overlapping-root-%d", i)
+				rootIDs = append(rootIDs, operatorID)
+			}
+			for i, operatorID := range rootIDs {
+				operator := newTestAddOnOperator(operatorID, operatorID, true)
+				if i == 0 {
+					operator.SetDependencies([]*privatev1.AddOnOperatorLocalReference{
+						privatev1.AddOnOperatorLocalReference_builder{Id: rootIDs[1]}.Build(),
+					})
+				}
+				seedAddOnOperatorObject(ctx, operator)
+			}
+
+			object, err := createClusterWithAddOnOperators(ctx, server, func() []*privatev1.AddOnOperatorReference {
+				refs := make([]*privatev1.AddOnOperatorReference, 0, len(rootIDs))
+				for _, rootID := range rootIDs {
+					refs = append(refs, privatev1.AddOnOperatorReference_builder{Id: rootID}.Build())
+				}
+				return refs
+			}())
+			Expect(err).ToNot(HaveOccurred())
+			resolvedIDs := make([]string, 0, len(object.GetSpec().GetAddOnOperators()))
+			for _, operator := range object.GetSpec().GetAddOnOperators() {
+				resolvedIDs = append(resolvedIDs, operator.GetId())
+			}
+			Expect(resolvedIDs).To(ConsistOf(rootIDs))
+		})
+
+		It("keeps existing cluster snapshots when dependency edges change", func() {
+			first := newTestAddOnOperator("operator-snapshot-first", "operator-snapshot-first", true)
+			second := newTestAddOnOperator("operator-snapshot-second", "operator-snapshot-second", true)
+			root := newTestAddOnOperator("operator-snapshot-root", "operator-snapshot-root", true)
+			root.SetDependencies([]*privatev1.AddOnOperatorLocalReference{
+				privatev1.AddOnOperatorLocalReference_builder{Id: first.GetId()}.Build(),
+			})
+			seedAddOnOperatorObject(ctx, first)
+			seedAddOnOperatorObject(ctx, second)
+			seedAddOnOperatorObject(ctx, root)
+
+			firstCluster, err := createClusterWithAddOnOperators(ctx, server, []*privatev1.AddOnOperatorReference{
+				privatev1.AddOnOperatorReference_builder{Id: root.GetId()}.Build(),
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			operatorServer, err := NewPrivateAddOnOperatorsServer().
+				SetLogger(logger).
+				SetAttributionLogic(attribution).
+				SetTenancyLogic(tenancy).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+			_, err = operatorServer.Update(ctx, privatev1.AddOnOperatorsUpdateRequest_builder{
+				Object: privatev1.AddOnOperator_builder{
+					Id: root.GetId(),
+					Dependencies: []*privatev1.AddOnOperatorLocalReference{
+						privatev1.AddOnOperatorLocalReference_builder{Id: second.GetId()}.Build(),
+					},
+				}.Build(),
+				UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"dependencies"}},
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+
+			secondCluster, err := createClusterWithAddOnOperators(ctx, server, []*privatev1.AddOnOperatorReference{
+				privatev1.AddOnOperatorReference_builder{Id: root.GetId()}.Build(),
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			firstIDs := make([]string, 0, len(firstCluster.GetSpec().GetAddOnOperators()))
+			for _, operator := range firstCluster.GetSpec().GetAddOnOperators() {
+				firstIDs = append(firstIDs, operator.GetId())
+			}
+			secondIDs := make([]string, 0, len(secondCluster.GetSpec().GetAddOnOperators()))
+			for _, operator := range secondCluster.GetSpec().GetAddOnOperators() {
+				secondIDs = append(secondIDs, operator.GetId())
+			}
+			Expect(firstIDs).To(ConsistOf(root.GetId(), first.GetId()))
+			Expect(secondIDs).To(ConsistOf(root.GetId(), second.GetId()))
+		})
+
 		It("rejects circular dependencies", func() {
 			first := newTestAddOnOperator("operator-cycle-a", "operator-cycle-a", true)
 			first.SetDependencies([]*privatev1.AddOnOperatorLocalReference{
@@ -1054,8 +1182,7 @@ var _ = Describe("Private clusters server", func() {
 				privatev1.AddOnOperatorReference_builder{Id: first.GetId()}.Build(),
 			})
 			Expect(err).To(HaveOccurred())
-			expectAddOnOperatorFieldViolation(err, "spec.add_on_operators[0]")
-			Expect(grpcstatus.Convert(err).Message()).To(ContainSubstring("cycle"))
+			Expect(err.Error()).To(ContainSubstring("dependency cycle detected"))
 		})
 
 		It("rejects mutually exclusive operators", func() {
@@ -1132,17 +1259,16 @@ var _ = Describe("Private clusters server", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("accepts and canonicalizes an unpublished operator", func() {
+		It("rejects an unpublished operator", func() {
 			operator := newTestAddOnOperator("operator-unpublished", "operator-unpublished", false)
 			seedAddOnOperatorObject(ctx, operator)
 
-			object, err := createClusterWithAddOnOperators(ctx, server, []*privatev1.AddOnOperatorReference{
+			_, err := createClusterWithAddOnOperators(ctx, server, []*privatev1.AddOnOperatorReference{
 				privatev1.AddOnOperatorReference_builder{Id: operator.GetId()}.Build(),
 			})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(object.GetSpec().GetAddOnOperators()).To(HaveLen(1))
-			Expect(object.GetSpec().GetAddOnOperators()[0].GetId()).To(Equal(operator.GetId()))
-			Expect(object.GetSpec().GetAddOnOperators()[0].GetName()).To(Equal(operator.GetMetadata().GetName()))
+			Expect(err).To(HaveOccurred())
+			expectAddOnOperatorFieldViolation(err, "spec.add_on_operators[0]")
+			Expect(grpcstatus.Convert(err).Message()).To(ContainSubstring("not published"))
 		})
 
 		It("accepts and canonicalizes an unpublished dependency", func() {
@@ -1394,6 +1520,7 @@ var _ = Describe("Private clusters server", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(updateResponse.GetObject().GetSpec().GetAddOnOperators()).To(HaveLen(1))
 			Expect(updateResponse.GetObject().GetSpec().GetAddOnOperators()[0].GetName()).To(Equal("operator-one"))
+			Expect(proto.Equal(updateResponse.GetObject().GetSpec(), createResponse.GetObject().GetSpec())).To(BeTrue())
 		})
 
 		It("preserves add-on operators when the referenced operator is deleted", func() {
@@ -3937,6 +4064,15 @@ var _ = Describe("Private clusters server", func() {
 				updated := response.GetObject()
 				Expect(updated.GetSpec().GetNodeSets()["compute"].GetVersion().GetId()).To(Equal("cv-next"))
 				Expect(updated.GetSpec().GetNodeSets()["gpu"].GetVersion().GetId()).To(Equal("cv-default"))
+				Expect(updated.GetStatus().GetUpgradeHistory()).To(HaveLen(1))
+				attempt := updated.GetStatus().GetUpgradeHistory()[0]
+				Expect(attempt.GetAttemptId()).NotTo(BeEmpty())
+				Expect(attempt.GetComponent().GetNodeSetId()).To(Equal("compute"))
+				Expect(attempt.GetSourceVersion()).To(Equal("4.17.0"))
+				Expect(attempt.GetTargetVersion()).To(Equal("4.18.0"))
+				Expect(attempt.GetState()).To(Equal(privatev1.ClusterUpgradeState_CLUSTER_UPGRADE_STATE_PENDING))
+				Expect(updated.GetSpec().GetNodeSetAttemptIds()["compute"]).To(Equal(attempt.GetAttemptId()))
+				Expect(updated.GetSpec().GetNodeSetAttemptIds()["gpu"]).To(BeEmpty())
 				scaled, err := server.Update(ctx, privatev1.ClustersUpdateRequest_builder{
 					Object: privatev1.Cluster_builder{
 						Id: cluster.GetId(),
@@ -3948,6 +4084,7 @@ var _ = Describe("Private clusters server", func() {
 				}.Build())
 				Expect(err).ToNot(HaveOccurred())
 				Expect(scaled.GetObject().GetSpec().GetNodeSets()["compute"].GetVersion().GetId()).To(Equal("cv-next"))
+				Expect(scaled.GetObject().GetSpec().GetNodeSetAttemptIds()["compute"]).To(Equal(attempt.GetAttemptId()))
 			})
 
 			It("rejects a node-set version change through a node-sets replacement", func() {
@@ -4085,6 +4222,7 @@ var _ = Describe("Private clusters server", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(updated.GetObject().GetSpec().GetNodeSets()["storage"].GetVersion().GetId()).To(Equal("cv-default"))
 					Expect(updated.GetObject().GetSpec().GetNodeSets()["compute"].GetVersion().GetId()).To(Equal("cv-default"))
+					Expect(updated.GetObject().GetStatus().GetNodeSets()["storage"].GetObservedVersion()).To(Equal("4.17.0"))
 				},
 				Entry("fills an omitted version", ""),
 				Entry("preserves the explicit control-plane version", "4-17-0"),
@@ -5148,6 +5286,17 @@ var _ = Describe("Private clusters server", func() {
 				Expect(err).ToNot(HaveOccurred())
 				return response.GetObject()
 			}
+			updateNodeSetVersion := func(id, name string) *privatev1.Cluster {
+				response, err := server.Update(ctx, privatev1.ClustersUpdateRequest_builder{
+					Object: privatev1.Cluster_builder{Id: id,
+						Spec: privatev1.ClusterSpec_builder{NodeSets: map[string]*privatev1.ClusterNodeSet{
+							name: privatev1.ClusterNodeSet_builder{Version: privatev1.ClusterVersionReference_builder{Name: "4-18-0"}.Build()}.Build(),
+						}}.Build()}.Build(),
+					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"spec.node_sets." + name + ".version"}},
+				}.Build())
+				Expect(err).NotTo(HaveOccurred())
+				return response.GetObject()
+			}
 
 			It("Is unset until the version changes", func() {
 				object := createCluster()
@@ -5162,6 +5311,15 @@ var _ = Describe("Private clusters server", func() {
 
 				Expect(updated.GetSpec().GetVersion().GetName()).To(Equal("4-18-0"))
 				Expect(updated.GetStatus().GetVersionTransitionTime()).ToNot(BeNil())
+				Expect(updated.GetStatus().GetUpgradeHistory()).To(HaveLen(1))
+				attempt := updated.GetStatus().GetUpgradeHistory()[0]
+				Expect(attempt.GetAttemptId()).NotTo(BeEmpty())
+				Expect(attempt.GetComponent().GetControlPlane()).NotTo(BeNil())
+				Expect(attempt.GetSourceVersion()).To(Equal("4.17.0"))
+				Expect(attempt.GetTargetVersion()).To(Equal("4.18.0"))
+				Expect(attempt.GetState()).To(Equal(privatev1.ClusterUpgradeState_CLUSTER_UPGRADE_STATE_PENDING))
+				Expect(attempt.GetAcceptedTime()).To(Equal(attempt.GetLastStateTime()))
+				Expect(updated.GetSpec().GetControlPlaneAttemptId()).To(Equal(attempt.GetAttemptId()))
 			})
 
 			It("Is not re-stamped when the same version is set again", func() {
@@ -5175,6 +5333,77 @@ var _ = Describe("Private clusters server", func() {
 				again := updateVersion(updated.GetId(), "4-18-0")
 
 				Expect(again.GetStatus().GetVersionTransitionTime().AsTime()).To(Equal(stamp.AsTime()))
+				Expect(again.GetStatus().GetUpgradeHistory()).To(HaveLen(1))
+				Expect(again.GetSpec().GetControlPlaneAttemptId()).To(Equal(updated.GetSpec().GetControlPlaneAttemptId()))
+			})
+
+			It("keeps independent component IDs and newest-first history", func() {
+				cluster := createCluster()
+				seedNextVersion()
+				controlPlane := updateVersion(cluster.GetId(), "4-18-0")
+				cpID := controlPlane.GetSpec().GetControlPlaneAttemptId()
+				compute := updateNodeSetVersion(cluster.GetId(), "compute")
+				computeID := compute.GetSpec().GetNodeSetAttemptIds()["compute"]
+				gpu := updateNodeSetVersion(cluster.GetId(), "gpu")
+				gpuID := gpu.GetSpec().GetNodeSetAttemptIds()["gpu"]
+				Expect(gpuID).NotTo(Equal(computeID))
+				Expect(gpu.GetSpec().GetNodeSetAttemptIds()["compute"]).To(Equal(computeID))
+				Expect(gpu.GetSpec().GetControlPlaneAttemptId()).To(Equal(cpID))
+				history := gpu.GetStatus().GetUpgradeHistory()
+				Expect(history).To(HaveLen(3))
+				Expect(history[0].GetAttemptId()).To(Equal(gpuID))
+				Expect(history[1].GetAttemptId()).To(Equal(computeID))
+				Expect(history[2].GetAttemptId()).To(Equal(cpID))
+			})
+
+			It("updates an earlier component's history entry without reordering it", func() {
+				cluster := createCluster()
+				seedNextVersion()
+				controlPlane := updateVersion(cluster.GetId(), "4-18-0")
+				cpID := controlPlane.GetSpec().GetControlPlaneAttemptId()
+				compute := updateNodeSetVersion(cluster.GetId(), "compute")
+				history := compute.GetStatus().GetUpgradeHistory()
+				Expect(history).To(HaveLen(2))
+				cpTransition := &privatev1.ClusterUpgradeHistoryEntry{}
+				cpTransition.SetAttemptId(cpID)
+				cpTransition.SetState(privatev1.ClusterUpgradeState_CLUSTER_UPGRADE_STATE_PROGRESSING)
+				cpTransition.SetLastStateTime(timestamppb.New(history[1].GetLastStateTime().AsTime().Add(time.Second)))
+				cpTransition.SetMessage("Control plane is updating")
+				response, err := server.Update(ctx, privatev1.ClustersUpdateRequest_builder{
+					Object: privatev1.Cluster_builder{Id: cluster.GetId(),
+						Status: privatev1.ClusterStatus_builder{UpgradeHistory: []*privatev1.ClusterUpgradeHistoryEntry{cpTransition}}.Build()}.Build(),
+					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"status.upgrade_history"}},
+				}.Build())
+				Expect(err).NotTo(HaveOccurred())
+				merged := response.GetObject().GetStatus().GetUpgradeHistory()
+				Expect(merged).To(HaveLen(2))
+				Expect(merged[0].GetAttemptId()).To(Equal(compute.GetSpec().GetNodeSetAttemptIds()["compute"]))
+				Expect(merged[1].GetAttemptId()).To(Equal(cpID))
+				Expect(merged[1].GetState()).To(Equal(privatev1.ClusterUpgradeState_CLUSTER_UPGRADE_STATE_PROGRESSING))
+				Expect(proto.Equal(merged[1].GetComponent(), history[1].GetComponent())).To(BeTrue())
+				Expect(proto.Equal(merged[1].GetAcceptedTime(), history[1].GetAcceptedTime())).To(BeTrue())
+			})
+
+			It("preserves server-owned attempt IDs on full-object and parent-spec edits", func() {
+				cluster := createCluster()
+				seedNextVersion()
+				updated := updateVersion(cluster.GetId(), "4-18-0")
+				id := updated.GetSpec().GetControlPlaneAttemptId()
+				full := proto.Clone(updated).(*privatev1.Cluster)
+				full.GetSpec().SetControlPlaneAttemptId("caller-value")
+				full.GetStatus().SetUpgradeHistory(nil)
+				response, err := server.Update(ctx, privatev1.ClustersUpdateRequest_builder{Object: full}.Build())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(response.GetObject().GetSpec().GetControlPlaneAttemptId()).To(Equal(id))
+				Expect(response.GetObject().GetStatus().GetUpgradeHistory()).To(HaveLen(1))
+				partial := privatev1.Cluster_builder{Id: cluster.GetId(),
+					Spec: proto.Clone(updated.GetSpec()).(*privatev1.ClusterSpec)}.Build()
+				partial.GetSpec().SetControlPlaneAttemptId("other-caller-value")
+				response, err = server.Update(ctx, privatev1.ClustersUpdateRequest_builder{
+					Object: partial, UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"spec"}},
+				}.Build())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(response.GetObject().GetSpec().GetControlPlaneAttemptId()).To(Equal(id))
 			})
 
 			// createClusterWithIdOnlyVersion inserts a cluster whose stored version reference

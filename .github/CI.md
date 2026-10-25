@@ -26,6 +26,37 @@ checking its box in the E2E comment of the pull request; the suite has its own l
 ("E2E BMaaS Netris Full Install", Run workflow, with the pull request's number, repository, branch and commit). A label no longer
 starts it. A new commit does not cancel a run that is already going.
 
+## A merge queue entry that fails
+
+The merge queue runs `CI` and the E2E suites on the same commit. When something that is required fails there, everything
+that still runs for the entry is stopped at once, instead of the entry holding its place in the queue until the slowest
+suite has ended (about 100 minutes). The job `result` of `e2e-queue.yml` (a shared workflow of osac-ci) watches the E2E
+suites and the other required checks of the commit (`CI`, `jira-reference`; the unit and integration tests of every
+component are jobs of the `CI` run). On the first failure it writes the required `E2E` check at once, `Failed: bmaas`
+for a suite or `Cancelled: stopped, CI / <job> failed` when another workflow caused it, and cancels every run of the
+commit that has not ended. GitHub then removes the entry. The jobs that were cancelled shut their clusters down after
+that, which can take a few minutes, without holding the queue. Only the first failure is shown: the legs that were still
+running are cancelled, so a second failure shows on the next attempt. Workflows that provide no required check (CodeQL,
+dependency review) do not stop an entry. When every suite passed, `result` writes `E2E` as passed.
+
+## Optional: CaaS regression tests on a pull request
+
+A pull request gets the CaaS sanity tests (`tests/e2e/caas/sanity`); the regression tests (`tests/e2e/caas/regression`) run
+every 5 hours on `main`. To try a new or changed regression test before it merges, start CaaS with both: check
+**CaaS Full Install · sanity + regression** in the E2E comment of the pull request (any member of the organization, any
+approval state), or comment `/test caas-full`. It is a second box of the CaaS suite, not a suite of its own: the same job
+and the same line, `E2E / CaaS Full Install` (which then says `· full`), so the required `E2E` check counts it exactly
+like the CaaS suite, and a CaaS run that passed this way satisfies it. It runs the same tests as the schedule (sanity and
+regression, with the CaaS references).
+
+- Asking for the same thing while it runs does nothing. Asking for the other version of CaaS while one runs (the sanity
+  box while the full one runs, or the other way round) stops that run and starts the one asked for.
+- A suite asked for by name runs again whatever it ended with; the bare `/test` only starts what has not passed.
+- The decision never chooses it, so a pull request still gets the CaaS sanity tests alone by default, and the merge queue
+  does not run it. VMaaS and BMaaS already run their regression tests on every pull request that needs their suite.
+- In the policy it is `e2e-caas-full` (`variant_of: caas`, `tier: full`); the `caas` job of `e2e-pr.yml` passes the tier to
+  the wrapper (`e2e-caas-full-install.yml`, input `tier`).
+
 ## Approvals after a rebase, and pull requests from forks
 
 - A clean rebase, or "Update branch", keeps the approval and moves it to the new head. A rebase that needs conflict
@@ -79,7 +110,7 @@ because a push drops the approval, and then runs the E2E once.
 ## Dependency updates
 
 Dependabot and Konflux pull requests are approved by the `osac-ci` bot account when every commit is the bot's own (plain,
-signed) and only dependency files changed (`workflows/bot-approve.yml`, which looks every 15 minutes, so the approval
+signed) and only dependency files changed (a sweep every 15 minutes, run from the osac-ci repository, so the approval
 comes within about a quarter of an hour). Anything else gets a person.
 
 ## Changing the pipeline
@@ -96,9 +127,9 @@ comes within about a quarter of an hour). Anything else gets a person.
   `e2e-pr.yml` and in `e2e-queue.yml` (copy the `vmaas` job). The line on the pull request follows the job of that name
   (waiting for a runner, running, then passed or failed, with a link to its log); a suite the policy did not pick does not
   run and has no line.
-- **The decision and the `E2E` check** (approval, CI result, the wording above), the queue plan and the bot sweep are the
-  shared workflows of [osac-project/osac-ci](https://github.com/osac-project/osac-ci); `e2e-pr.yml`, `e2e-queue.yml` and
-  `bot-approve.yml` here are thin callers that keep the triggers and the suite jobs. A member of the organization can start suites by hand with the comment `/test` (the suites the change needs) or
+- **The decision and the `E2E` check** (approval, CI result, the wording above) and the queue plan are the shared
+  workflows of [osac-project/osac-ci](https://github.com/osac-project/osac-ci); `e2e-pr.yml` and `e2e-queue.yml` here are
+  thin callers that keep the triggers and the suite jobs. The bot sweep runs from osac-ci itself (no file here). A member of the organization can start suites by hand with the comment `/test` (the suites the change needs) or
   `/test vmaas caas` (those suites), or from the comment the decision keeps on a pull request written by a member
   (a checkbox per suite; any approval state, a draft and a fork of a member included; a pull
   request by someone outside the organization gets no comment). The rules they apply are one page:

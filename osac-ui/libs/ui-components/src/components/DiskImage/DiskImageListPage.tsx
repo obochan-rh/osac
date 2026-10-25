@@ -12,11 +12,12 @@ import {
   ToolbarItem,
 } from '@patternfly/react-core';
 
-import { Architecture, DiskImageLifecycle, GuestOSFamily } from '@osac/types';
+import { Architecture, DiskImageLifecycle, DiskImages, GuestOSFamily } from '@osac/types';
 import { Tenants } from '@osac/types/private';
 import CreateButton from '@osac/ui-components/components/Primitives/CreateButton.tsx';
 
 import DiskImageTable from './DiskImageTable';
+import { diskImageFieldIds } from './fieldIds';
 import { useListResource } from '../../api/use-resource';
 import { buildDiskImageListFilter, useDiskImages } from '../../api/v1/disk-image';
 import { SEARCH_PARAM, useArrayPageFilter, usePageFilter } from '../../hooks/use-page-filter';
@@ -226,7 +227,7 @@ const DiskImageListPage = () => {
       description={t('Manage disk images available for provisioning virtual machines.')}
       error={error}
       actions={
-        <CreateButton to="/admin/infrastructure/disk-images/create">
+        <CreateButton service={DiskImages} to="/admin/infrastructure/disk-images/create">
           {t('Create disk image')}
         </CreateButton>
       }
@@ -282,7 +283,7 @@ const DiskImageListPage = () => {
               </ToolbarItem>
               <ToolbarItem>
                 <Checkbox
-                  id="disk-image-show-obsolete"
+                  id={diskImageFieldIds.showObsolete}
                   label={t('Show obsolete')}
                   isChecked={showObsolete}
                   onChange={(_event, checked) => setShowObsoleteParam(checked ? 'true' : '')}
