@@ -104,8 +104,9 @@
    §6.3). Survives upgrades by design.
 
 **What is deliberately NOT externalized:** the AAP stack (`osac-aap-*`
-deployments), CNV/KubeVirt, LVMS, cert-manager, trust-manager, MetalLB —
-these still run in-cluster. The bundled Keycloak *database*
+deployments), CNV/KubeVirt, LVMS, cert-manager, trust-manager, MetalLB,
+and MCE (multicluster engine for Kubernetes) with the workload clusters
+it manages — these still run in-cluster. The bundled Keycloak *database*
 (`keycloak-database-0`) is kept scaled-to-0 as a rollback point.
 
 ---
