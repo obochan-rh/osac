@@ -211,7 +211,7 @@ Required for a production deployment:
   information, see
   [`fulfillment-service/docs/INSTALL.md`](https://github.com/osac-project/osac/blob/main/fulfillment-service/docs/INSTALL.md).
   For end-to-end external-database wiring — identity and certificate
-  requirements, values, and migrating a bundled deployment — see the
+  requirements, and values — see the
   [external services support guide](external-services-support-guide.md).
 - **An external secret store.** The bundled OpenBao instance is for testing and
   CI, not production. Before installing the `osac` chart, prepare Vault or
