@@ -37,6 +37,14 @@ if (!/^[a-z0-9]{1,32}$/i.test(diskImageTestRunId)) {
 }
 process.env.OSAC_DISK_IMAGE_TEST_RUN_ID = diskImageTestRunId.toLowerCase();
 
+// Share a unique ID across Storage tier projects so teardown only targets this run's tier.
+const storageTierTestRunId =
+  process.env.OSAC_STORAGE_TIER_TEST_RUN_ID ?? randomUUID().replace(/-/g, '').slice(0, 12);
+if (!/^[a-z0-9]{1,32}$/i.test(storageTierTestRunId)) {
+  throw new Error('OSAC_STORAGE_TIER_TEST_RUN_ID must contain 1-32 letters or digits.');
+}
+process.env.OSAC_STORAGE_TIER_TEST_RUN_ID = storageTierTestRunId.toLowerCase();
+
 // Ad hoc specs (typically written by an AI agent to manually verify a change)
 // live in this gitignored scratch directory, never under src/ — that keeps
 // the "throwaway, not a test suite" boundary obvious to anyone browsing the
@@ -103,6 +111,19 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], trace: 'off', video: 'off' },
     },
     {
+      name: 'vmaas-storage-tier',
+      testDir: vmaasDir,
+      testMatch: /create\.storage_tier\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], trace: 'off', video: 'off' },
+      teardown: 'vmaas-storage-tier-delete',
+    },
+    {
+      name: 'vmaas-storage-tier-delete',
+      testDir: vmaasDir,
+      testMatch: /delete\.storage_tier\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], trace: 'off', video: 'off' },
+    },
+    {
       name: 'vmaas-instance-type',
       testDir: vmaasDir,
       testMatch: /create\.instance_type\.spec\.ts/,
@@ -148,6 +169,19 @@ export default defineConfig({
       testDir: vmaasDir,
       testMatch: /delete\.disk_images\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], trace: 'off', video: 'off' },
+    },
+    {
+      name: 'vmaas-catalog',
+      testDir: vmaasDir,
+      testMatch: /create\.catalog\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], trace: 'off', video: 'off' },
+    },
+    {
+      name: 'vmaas-catalog-delete',
+      testDir: vmaasDir,
+      testMatch: /delete\.catalog\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], trace: 'off', video: 'off' },
+      dependencies: ['vmaas-catalog'],
     },
   ],
 });
