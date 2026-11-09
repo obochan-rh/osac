@@ -1,4 +1,4 @@
-# OSAC-4385 Task Breakdown — DRAFT v4 (pending approval)
+# OSAC-4385 Task Breakdown — DRAFT v5 (pending approval)
 
 Parent: OSAC-4385 (Request Rate Limiting) ← OSAC-4382 (Fulfillment
 Service Zero Trust Hardening; feature assignee Manuel Lorenzo).
@@ -109,6 +109,70 @@ Anonymous regex endpoints (`Capabilities/`, `JsonWebKeySet/`,
 higher bucket.
 
 ## MVP scope (F11-faithful)
+
+### Task P1 — Proof of concept (both layers, before committing the design)
+
+**Summary:** Prototype the two enforcement layers end to end and
+validate behavior before full implementation
+
+**Owner:** FT
+
+**Background:** The Phase-0 record gains force with working
+evidence. A throwaway POC on a dev/Kind cluster answers the behavior
+questions cheaply, before tasks 1.1–2.1a harden the design into
+production code.
+
+**Description:**
+- In-process: a minimal pre-auth interceptor with a naive limiter,
+  wired first in the chain on a dev deployment. Confirm rejected
+  requests open no DB transaction, anonymous endpoints behave, and
+  Watch streams are limited at establishment only.
+- Edge: the E1 Envoy filter on the same cluster with per-route
+  stream exemption. Confirm console WebSocket and Watch streams
+  survive a throttled default bucket.
+- REST: confirm 429 + Retry-After reach a REST client through the
+  gateway.
+- Rough overhead measurement (latency p99 with and without the
+  limiter) — indicative only, the real numbers come from S1.
+
+**Acceptance criteria:** findings recorded on the Phase-0 decision
+record; any behavior surprise turns into a plan change before 1.1
+starts.
+
+**Test tier:** N/A (throwaway evidence, not merged code).
+**Dependencies:** none — can start immediately, in parallel with
+Phase-0 drafting.
+
+### Task S1 — Load and scale validation
+
+**Summary:** Measure the limiter's cost and calibrate the provisional
+defaults under production-like load
+
+**Owner:** FT; QE support for the load rig
+
+**Background:** Phase-0 item 5 requires defaults backed by workload
+assumptions and load-test criteria. This task is where those criteria
+get executed. Without it the defaults stay guesses and the perf cost
+of the limiter is unknown.
+
+**Description:**
+- Load suite against a deployed stack with the limiter enabled:
+  latency overhead (p50/p99) versus limiter disabled, at normal and
+  flood rates.
+- Memory footprint of per-key buckets under many distinct client
+  keys (idle GC effectiveness), and the Envoy filter's overhead on
+  the edge path.
+- Throughput ceiling comparison: limiter off, edge only, in-process
+  only, both — so the layered cost is known, not assumed.
+- Output: measured numbers feeding the 4.1 default values, recorded
+  with the workload assumptions on the epic.
+
+**Acceptance criteria:** results documented; 4.1 defaults cite them;
+no unexplained regression versus the limiter-disabled baseline.
+
+**Test tier:** performance/load (FT rig, QE-assisted; not part of
+the CI regression suite — run per release or on demand).
+**Dependencies:** 2.1a, 3.1, E1 (all layers present to measure).
 
 ### Task E1 — Envoy local rate limit (interim edge layer)
 
@@ -470,8 +534,10 @@ signal, since each real client is a single source IP anyway.
 ## Dependencies, sequencing, priorities
 
 ```text
+P1-POC (immediately, evidence for Phase-0) ──┐
 Phase-0 decision record ──> E1 (Envoy edge, chart-only)
                         └─> 1.1 ──> 1.2 ──> 2.1a ──> 3.1 ──> 4.1 ──> 4.2
+                                                    └─> S1 (load/scale) ──> 4.1 defaults
 2.1b, 2.2  (deferred/stretch, pending Phase-0 item 1)
 3.2        (linked to 5880, no work here unless interim chosen)
 T9         (audit after 1.2/2.1a)
@@ -479,23 +545,25 @@ T10        (tracks 7243, no dependency in either direction)
 N1         (linked finding, file anytime)
 ```
 
-**P1:** Phase-0 decision record → E1 + 1.1 → 1.2 → 2.1a
-**P2:** 3.1, T9 audit (early — cross-repo review latency)
+**P1:** Phase-0 decision record (fed by the POC) → E1 + 1.1 → 1.2 → 2.1a
+**P2:** 3.1, S1 (defaults must cite measured numbers), T9 audit
 **P3:** 4.1, 4.2 (closing)
 **Deferred:** 2.1b, 2.2, 3.2, T10-tracking
 
-Rationale: the decision record precedes implementation by design.
-E1 runs first or in parallel — it is small, Manuel endorsed starting
-there, and it buys outer-layer protection while the real work
-happens. 2.1a is the reference implementation and carries the
-trusted-proxy plumbing that every later stage depends on. Nothing in
-the MVP blocks on OSAC-7243.
+Rationale: the decision record precedes implementation by design,
+and the POC feeds it evidence rather than assertions. E1 runs first
+or in parallel — it is small, Manuel endorsed starting there, and it
+buys outer-layer protection while the real work happens. 2.1a is the
+reference implementation and carries the trusted-proxy plumbing that
+every later stage depends on. S1 runs once all layers exist so the
+4.1 defaults cite measurements instead of guesses. Nothing in the
+MVP blocks on OSAC-7243.
 
 ## Cross-team coordination
 
 | Team | Tasks | Interaction | When |
 |---|---|---|---|
-| FT (us) | E1, 1.1, 1.2, 2.1a, 3.1, 4.1, 4.2 | — | start after Phase-0 |
+| FT (us) | P1-POC, E1, 1.1, 1.2, 2.1a, 3.1, S1, 4.1, 4.2 | — | POC immediately, rest after Phase-0 |
 | Manuel (feature assignee) | Phase-0 record | review proposed (not mandatory sign-off) | Phase 0 |
 | CPX (Juan H., Manuel L.) | 2.2 (stretch) | their surface; review if committed | post Phase-0 |
 | REST owners (Daniel E., Riccardo P.) | 3.1 sign-off | review | after 2.1a |
