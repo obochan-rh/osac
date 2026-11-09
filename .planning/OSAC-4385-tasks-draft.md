@@ -1,4 +1,4 @@
-# OSAC-4385 Task Breakdown — DRAFT v3 (pending approval)
+# OSAC-4385 Task Breakdown — DRAFT v4 (pending approval)
 
 Parent: OSAC-4385 (Request Rate Limiting) ← OSAC-4382 (Fulfillment
 Service Zero Trust Hardening; feature assignee Manuel Lorenzo).
@@ -12,6 +12,17 @@ unassigned).
 Each task follows repo conventions: Jira **Task** type, Component
 inherited from parent (**Core**), integration-test tier per
 `docs/INTEGRATION-TESTING.md`.
+
+Update in v4, following the Nov 4 epic discussion (Manuel Lorenzo,
+Juan Hernández, Oved Ourfali): the Envoy local rate limit moves from
+a deferred decision (old T10) into the MVP as an explicit interim
+edge layer — Manuel endorsed starting there, and it is useful
+upstream regardless of what OSAC-7243 decides for the Red Hat build.
+The in-process pre-auth limiter stays the core MVP and the durable
+control. A new finding from Manuel's zero-trust comment — no
+NetworkPolicy prevents in-cluster traffic from bypassing the ingress
+proxy — is recorded as its own linked item. Sequencing: the in-process
+work has no dependency on OSAC-7243.
 
 Owner codes:
 - **FT** = fulfillment-service team (us — Ofer Bochan + team)
@@ -35,13 +46,16 @@ The Phase-0 output is a short decision record on the epic, covering:
    Manuel and Juan to review the decision record is a *proposed*
    step, not a mandatory joint sign-off.)
 2. **Enforcement location per deployment variant, accounting for
-   OSAC-7243.** Upstream Envoy local rate limit is a *candidate*
-   approach, pending agreement and validation — 7243 may remove
-   standalone Envoy from the Red Hat build, and neither Service Mesh
-   nor Gateway API policy is a selected or validated replacement.
-   The portable default is in-process per-IP with trusted-proxy
-   client-IP propagation; the Envoy option stays open for upstream
-   builds if validated.
+   OSAC-7243.** Two layers, in order. First, the Envoy local rate
+   limit in the ingress-proxy (Task E1) — chart-only work, endorsed
+   by Manuel as the starting point, useful upstream regardless of
+   7243's outcome. Second, the in-process per-IP limiter before
+   txInterceptor (Task 2.1a) — the durable control that works in
+   every build variant and covers paths that bypass the proxy.
+   Neither layer depends on the other; the in-process work has no
+   dependency on OSAC-7243 and is not blocked by it. What 7243
+   decides only affects whether the Envoy layer exists in the Red
+   Hat build.
 3. **Trusted source-IP attribution and REST-to-gRPC accounting.**
    In-process per-IP requires the real client IP to survive the
    proxy hop (OpenBao/Vault `x_forwarded_for_authorized_addrs`-
@@ -71,6 +85,14 @@ The Phase-0 output is a short decision record on the epic, covering:
      strictness), recorded as a decision.
    - Coverage: integration-test evidence matrix per repo policy
      (suite path, command, real vs mocked boundary, gap Jira URLs).
+6. **In-cluster bypass (from Manuel's zero-trust comment).** Nothing
+   today prevents in-cluster traffic from reaching the fulfillment
+   services directly, bypassing the ingress proxy — so proxy-level
+   limiting alone never covers internal callers. Two outcomes: the
+   in-process limiter (2.1a) is the layer that covers this, and the
+   NetworkPolicy gap itself deserves its own ticket (see N1 in
+   linked scope) since it is a pre-existing finding independent of
+   rate limiting.
 
 ## Two-stage enforcement model (resolves the chain-position question)
 
@@ -87,6 +109,45 @@ Anonymous regex endpoints (`Capabilities/`, `JsonWebKeySet/`,
 higher bucket.
 
 ## MVP scope (F11-faithful)
+
+### Task E1 — Envoy local rate limit (interim edge layer)
+
+**Summary:** Add Envoy local_ratelimit filter to the ingress-proxy as
+the interim edge layer
+
+**Owner:** FT; INST review for the chart change (Linoy Hadad, Ori
+Amizur)
+
+**Background / findings:**
+- Manuel's Nov 4 comment endorses starting at the Envoy level:
+  easy to implement, a positive first step.
+- The external-api listener's HTTP filter chain is currently only
+  `cors` → `router` (verified in
+  `charts/service/templates/ingress-proxy/_config.yaml.tpl`), so this
+  is chart-only work — no service code.
+- Scope guard: this is the outer layer only. It does not cover
+  in-cluster bypass (Manuel's zero-trust point, see Phase-0 item 6),
+  it is keyed per replica not per tenant, and OSAC-7243 may remove
+  standalone Envoy from the Red Hat build — so it is interim and
+  upstream-first, not the answer to F11 by itself.
+
+**Description:**
+- Add `envoy.filters.http.local_ratelimit` to the external-api
+  listener's filter chain, configurable via chart values, off by
+  default.
+- Per-route `typed_per_filter_config` for console WebSocket and Watch
+  stream routes so long-lived streams are not throttled by the default
+  bucket (same mechanism as the chart's existing CORS per-route
+  config).
+- Also apply to the REST gateway route with its own bucket.
+
+**Acceptance criteria:**
+- `helm template` renders with the filter on and off; stream routes
+  carry the per-route exemption; installer CI green.
+
+**Test tier:** chart render evidence + covered end-to-end by Task 4.3.
+**Dependencies:** Phase-0 record only — can start in parallel with
+1.1.
 
 ### Task 1.1 — Rate limiter core (internal/ratelimit package)
 
@@ -271,6 +332,19 @@ linked from this task.
 
 ## Deferred / linked scope
 
+### Task N1 — In-cluster bypass NetworkPolicy (linked finding, own ticket)
+
+**Summary:** File and track the missing NetworkPolicy that allows
+in-cluster traffic to bypass the ingress proxy
+
+**Owner:** to assign — raised by Manuel's Nov 4 comment, pre-existing
+and independent of rate limiting. Our role: file the ticket (finding:
+fulfillment-internal-api / fulfillment-api services are reachable
+from inside the cluster without going through the ingress-proxy; no
+NetworkPolicy restricts this), link it to this epic and to OSAC-4382,
+and let the platform owners decide the policy. Rate limiting does not
+wait on it: the in-process limiter covers direct traffic regardless.
+
 ### Task 2.1b — Post-auth per-tenant quotas (deferred pending Phase-0 item 1)
 
 **Summary:** Per-tenant (authenticated subject) rate limiting after
@@ -315,25 +389,21 @@ RESOURCE_EXHAUSTED once limits tighten, and whether they requeue
 with backoff; implementation work only if the audit finds a gap.
 **Dependencies:** 1.2 (contract), 2.1a.
 
-### Task T10 — Envoy-layer option + OSAC-7243 contingency
+### Task T10 — OSAC-7243 contingency tracking
 
-**Summary:** Evaluate the Envoy local rate limit as a candidate
-upstream approach and track the 7243 contingency
+**Summary:** Track what OSAC-7243 decides for the ingress and its
+effect on the Envoy edge layer
 
-**Owner:** FT (decision); INST for any Envoy Gateway work (Linoy
-Hadad / Ori Amizur)
-**Description (decision/validation, no committed code):**
-- Treat the Envoy `local_ratelimit` filter in the fulfillment
-  ingress-proxy as a CANDIDATE upstream approach, pending agreement
-  and validation — not selected. OSAC-7243 may remove standalone
-  Envoy from the RH build; neither OpenShift Service Mesh nor
-  Gateway API policy is a validated replacement.
-- If pursued: per-route `typed_per_filter_config` required so
-  console WS / Watch stream routes are not throttled by a default
-  bucket (same mechanism as the chart's CORS policy).
-- Record the decision and the per-deployment-variant enforcement
-  matrix (Phase-0 item 2) on the epic.
-**Dependencies:** 2.1a (baseline of what in-process covers).
+**Owner:** FT (tracking only)
+**Description:** The Envoy local rate limit is now MVP Task E1. What
+remains here is tracking: OSAC-7243 may remove standalone Envoy from
+the Red Hat build, in which case the E1 layer exists upstream only
+and the Red Hat build relies on the in-process limiter (2.1a) plus
+whatever platform-managed ingress 7243 selects. When 7243's decision
+record lands, record the per-deployment-variant enforcement matrix
+(Phase-0 item 2) on this epic.
+**Dependencies:** follows OSAC-7243's Phase 1; nothing in this epic
+blocks on it.
 
 ## Testing plan (coverage matrix per docs/INTEGRATION-TESTING.md)
 
@@ -400,35 +470,38 @@ signal, since each real client is a single source IP anyway.
 ## Dependencies, sequencing, priorities
 
 ```text
-Phase-0 decision record ──> 1.1 ──> 1.2 ──> 2.1a ──> 3.1 ──> 4.1 ──> 4.2
-                          (gates everything)
+Phase-0 decision record ──> E1 (Envoy edge, chart-only)
+                        └─> 1.1 ──> 1.2 ──> 2.1a ──> 3.1 ──> 4.1 ──> 4.2
 2.1b, 2.2  (deferred/stretch, pending Phase-0 item 1)
 3.2        (linked to 5880, no work here unless interim chosen)
 T9         (audit after 1.2/2.1a)
-T10        (decision after 2.1a; tracks 7243)
+T10        (tracks 7243, no dependency in either direction)
+N1         (linked finding, file anytime)
 ```
 
-**P1:** Phase-0 decision record → 1.1 → 1.2 → 2.1a
+**P1:** Phase-0 decision record → E1 + 1.1 → 1.2 → 2.1a
 **P2:** 3.1, T9 audit (early — cross-repo review latency)
 **P3:** 4.1, 4.2 (closing)
-**Deferred:** 2.1b, 2.2, 3.2, T10-decision
+**Deferred:** 2.1b, 2.2, 3.2, T10-tracking
 
-Rationale: decision record precedes implementation sequencing by
-design (Phase-0 item order above). 2.1a is the reference
-implementation and carries the trusted-proxy plumbing that every
-later stage depends on.
+Rationale: the decision record precedes implementation by design.
+E1 runs first or in parallel — it is small, Manuel endorsed starting
+there, and it buys outer-layer protection while the real work
+happens. 2.1a is the reference implementation and carries the
+trusted-proxy plumbing that every later stage depends on. Nothing in
+the MVP blocks on OSAC-7243.
 
 ## Cross-team coordination
 
 | Team | Tasks | Interaction | When |
 |---|---|---|---|
-| FT (us) | 1.1, 1.2, 2.1a, 3.1, 4.1, 4.2 | — | start after Phase-0 |
+| FT (us) | E1, 1.1, 1.2, 2.1a, 3.1, 4.1, 4.2 | — | start after Phase-0 |
 | Manuel (feature assignee) | Phase-0 record | review proposed (not mandatory sign-off) | Phase 0 |
 | CPX (Juan H., Manuel L.) | 2.2 (stretch) | their surface; review if committed | post Phase-0 |
 | REST owners (Daniel E., Riccardo P.) | 3.1 sign-off | review | after 2.1a |
 | MCP (Eran C.) | 5880 coordination | link, align scope | Phase 0 |
 | OPS (Dan M., bkopilov) | T9 audit | their client code | after 2.1a |
-| INST (Linoy H., Ori A.) | 4.1 values, 7243 tracking | values wiring; Envoy contingency | end of MVP |
+| INST (Linoy H., Ori A.) | E1 chart review, 4.1 values, 7243 tracking | chart change; values wiring; Envoy contingency | E1 early, rest end of MVP |
 
 ## Out of scope (record on epic)
 - Envoy global rate-limit service (external ratelimit cluster).
@@ -439,42 +512,56 @@ later stage depends on.
   flag ownership question. Rate limiting does not replace the
   tx-before-authn reorder.
 
-## Draft Phase-0 comment for the epic
+## Draft reply for the epic (to Manuel's cost-benefit comment and
+## Oved's sequencing question)
 
-Proposing the approach for this epic — a short decision record
-before task work starts:
+Replying to Manuel Lorenzo's cost-benefit question and Oved
+Ourfali's sequencing question. The Juan reply from v3 was posted on
+Nov 4; this replaces the older Phase-0 draft comment, which was
+never posted.
 
-1. Scope: the F11 finding asks for source-IP keyed limiting early in
-   the chain plus REST middleware. We propose that as the MVP, with
-   post-auth per-tenant quotas and console-proxy session caps as
-   follow-up hardening — in this epic or deferred, per your call.
-2. Enforcement point: in-process per-IP limiting in the grpc-server
-   (before the transaction interceptor, so rejected requests open no
-   DB transaction) with trusted-proxy client-IP propagation from the
-   ingress proxy. Envoy local rate limiting (per Juan's comment)
-   stays a candidate for upstream builds, but given OSAC-7243 may
-   remove standalone Envoy from the Red Hat build, we don't want to
-   build the control only there.
-3. REST path: one logical request must not consume the same quota
-   twice; whether the gateway adds its own distinct budget or relies
-   on the server-side limit is part of the decision record.
-4. MCP: cross-replica aggregate limits are OSAC-5880's requirement —
-   we'll link the epics rather than duplicate; per-pod interim
-   behavior only if useful.
-5. Defaults provisional with workload assumptions; limiter failure
-   behavior (fail-open with alerting) decided up front; per-replica
-   budget semantics documented.
-6. OSAC-4384 (auth chain DoS) is unassigned and overlaps our
-   interceptor position — does it need an owner?
+Draft text:
 
-Task breakdown follows once the direction is confirmed.
+---
 
-## Draft reply to Juan's comment on the epic
+Answering Manuel's cost-benefit question, and Oved's question about
+sequencing with the Envoy work.
 
-Thanks Juan! Good point about the Red Hat build. Manuel Lorenzo — is
-Envoy something we can rely on for RH builds, or should we keep the
-limiting inside the service itself? If Envoy is fine, the proxy is
-the natural place for it; if not, we'll do it in-process so this
-won't block us. Either way we'll make sure console and watch streams
-aren't affected. We'll share the plan soon and would love your
-review on the console parts, Juan.
+Our recommendation is both layers, in order:
+
+1. The Envoy local rate limit first. It's chart-only work — the
+   external-api listener's filter chain is just CORS and router
+   today, so adding the local_ratelimit filter is a small change. It
+   buys outer-layer protection quickly, which is what Manuel
+   suggested starting with. We'd exempt the console WebSocket and
+   Watch stream routes so long-lived streams are not throttled.
+2. The in-process limiter in the grpc-server as the durable control.
+   This is the part that satisfies F11 as written: it sits before
+   the transaction interceptor, so rejected requests open no DB
+   transaction, and it works the same in every build variant.
+
+On the cost side of Manuel's question: the in-process limiter is a
+real implementation effort — a reusable limiter package, the
+interceptor with trusted client-IP propagation, REST 429 mapping,
+and configuration. We have that broken into tasks and will share the
+breakdown below.
+
+Two things worth recording from the discussion so far:
+
+- Manuel's zero-trust point cuts both ways. Envoy protects external
+  traffic, but nothing stops in-cluster traffic from reaching the
+  services directly — AFAIK there is no NetworkPolicy for that
+  today. That is a pre-existing gap independent of rate limiting; we
+  think it deserves its own ticket, and it's also the reason the
+  in-process layer matters: it covers direct traffic regardless of
+  proxy.
+- For Oved's sequencing question: no need to wait for OSAC-7243.
+  The Envoy config is useful upstream either way, and the in-process
+  limiter doesn't depend on what proxy ends up in front. What 7243
+  decides only affects whether the Envoy layer exists in the Red Hat
+  build. For context, assisted-service serves its API through plain
+  OpenShift ingress with no proxy of its own — one way Red Hat
+  products do it — but that's context only; the ingress choice
+  itself is OSAC-7243's to make and still open.
+
+Task breakdown follows in the next comment.
