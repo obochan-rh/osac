@@ -1,0 +1,3 @@
+ERROR:
+  Code: Unauthenticated
+  Message: invalid ticket: decrypt token: jwe.Decrypt: failed to parse buffer: jwe.Parse: compact JWE format must have five parts (3)

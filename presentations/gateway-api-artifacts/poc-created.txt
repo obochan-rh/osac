@@ -1,0 +1,7 @@
+GatewayClass/openshift-default
+Secret/openshift-ingress/fulfillment-api-tls
+Gateway/openshift-ingress/osac-gateway
+ConfigMap/osac/osac-backend-ca
+BackendTLSPolicy x3 (osac)
+HTTPRoute osac-ext,osac-int (osac)
+EndpointSlice *-gw-poc

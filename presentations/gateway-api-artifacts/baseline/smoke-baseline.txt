@@ -1,0 +1,17 @@
+Phase 0 baseline smoke (Envoy up) — 2026-11-17, test-infra-cluster-dev
+token-login (admin SA token via oc create token): OK
+ext-listener REST  compute_instances (auth): 200
+int-listener REST  compute_instances (auth): 200
+jwks (unauth): 200
+osac-ui console route: 200
+clusters / CaaS: 503 by design (caas disabled in vmaas-ci)
+Envoy endpoint (restore target): both Services -> 172.30.26.168, ready=true
+Helm rollback anchor: osac revision 1
+
+Watch baseline (osac.public.v1.Events.Watch, quiet, req {}; REST /api/events/v1/events/watch):
+  Discriminated 5s/20s/62s -> each held EXACTLY max-time; the trailing
+  "Unavailable: disconnect before headers / remote reset" is the teardown
+  artifact of cutting a quiet stream (no events => no response headers).
+  BASELINE: Envoy keeps a quiet Watch open for the full client duration
+  (route timeout 0s / idle 0s). This is the D5 anchor to compare the
+  CIO gateway against (does a quiet Watch survive equivalently there?).

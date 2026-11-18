@@ -1,0 +1,75 @@
+Phase 2 parallel validation — CIO gateway (192.168.160.240:443) vs Envoy baseline
+Date 2026-11-17, test-infra-cluster-dev (OCP 4.22.14). Envoy still serving throughout.
+
+PASS:
+- REST ext + int compute_instances (auth): 200 / 200
+- jwks (unauth): 200 ; osac-ui: 200 (baseline)
+- ALPN: h2 (independent openssl check)
+- gRPC reflection + public unary (ComputeInstances/List {}): OK
+- Public/private isolation: ext osac.private.v1.Hubs/List -> Unimplemented (gateway 404 on
+  unmatched private path, gRPC-mapped); int -> JSON. Boundary holds.
+- Upstream TLS 1.3 + SAN (BackendTLSPolicy x3, dedicated ca.crt CM): backends reachable => OK
+- HTTPRoute (all-HTTPRoute incl. RegExp) + BackendTLSPolicy: Accepted + ResolvedRefs True
+
+D5 (make-or-break) — quiet Watch (osac.public.v1.Events.Watch, {}):
+- Envoy baseline: held full client duration (5/20/62s all client-cut); idle 0s => indefinite.
+- CIO gateway, clean no-client-deadline measurement:
+    120s hold: survived (clears the ~15s request-timeout trap; timeouts.request:0s honored)
+    360s hold: GATEWAY cut at ~301s, Code Unavailable => Istio default stream_idle_timeout ~5min
+- CONCLUSION: request-timeout parity achievable; quiet-stream IDLE parity NOT preserved.
+  Impact: Watch quiet >5min dropped; console idle wants 1800s, gateway gives ~300s.
+  Idle timeout has NO Gateway API field => mitigation required:
+    1) app-level keepalive/heartbeat on the stream (<300s) — supported, but a contract change
+    2) supported platform knob — none known in 4.22 v1.4.1 CIO path
+    3) EnvoyFilter stream_idle_timeout on CIO istiod — lab-only, support-flagged, UNTESTED here
+
+GATE 2: all items pass EXCEPT D5. Held on a D5 mitigation decision before any Phase 3 cutover.
+
+D5 ROOT-CAUSE + MITIGATION (code review, fulfillment-service):
+- Console: console-client-ping-interval default 30s (WS ping, stream frames) < 300s
+  => console streams stay active, survive the gateway idle timer. NOT a regression
+  (confirm the gRPC ConsoleProxy.Connect leg separately).
+- Watch: events_server.go Sends only on a real event (line ~521); 1s ticker is internal
+  Kafka topic refresh, not a client heartbeat. Quiet Watch => no stream data => 300s cut.
+  THE real D5 regression.
+- RECOMMENDED FIX (supported): add a periodic heartbeat Send to osac.public.v1.Events.Watch
+  at <300s (e.g. 30-60s), mirroring consoles 30s ping. Small fulfillment-service change,
+
+D5 ROOT-CAUSE + MITIGATION (fulfillment-service code review):
+- Console: console-client-ping-interval default 30s WS ping, under 300s => console
+  streams stay active and survive the gateway idle timer. Not a regression
+  [confirm the gRPC ConsoleProxy.Connect leg separately].
+- Watch: events_server.go sends only on a real event; the 1s ticker is internal
+  Kafka topic refresh, not a client heartbeat => quiet Watch dies at ~300s = the
+  real D5 regression.
+- RECOMMENDED SUPPORTED FIX: add a periodic heartbeat Send to Events.Watch under
+  300s [e.g. 30-60s], mirroring console 30s ping. Small fulfillment-service change,
+  no EnvoyFilter, clears supportability/FIPS. Clients must tolerate keepalive msgs.
+- VERDICT: migration FEASIBLE; D5 solved app-side, not an unsupportable platform
+  gap. Phase 3 cutover held until the Watch heartbeat lands and re-validates
+  [quiet Watch survives over 5min through the gateway].
+
+D5 CORRECTION (2026-11-17) — request-timeout routing (R-1), NOT idle; gateway-only:
+- Access log: POST /osac.public.v1.Events/Watch ... 300001 ... UR upstream_reset ... osac.osac-ext.5
+  => Watch matched the broad gRPC rule (osac-ext.5, request:300s), not the 0s Watch rule.
+- Code: _config.yaml.tpl Watch route timeout:0s (L147-154) declared BEFORE unary 300s
+  (L169-176); comment L115 'must be matched before ... catches all' => Envoy = ordered
+  first-match (Watch 0s wins). Gateway API: RegEx precedence implementation-specific
+  (oc explain httproute...path.type) => order NOT honored => Watch falls to 300s rule.
+- Heartbeat was the WRONG lever: 60s keepalive fired (4 msgs in 300s) yet stream still
+  cut at 300s => request-duration cap, not idle. Revert the heartbeat image.
+- Envoy A/B: quiet Watch straight through the idle old Envoy pod (port-forward) confirms
+  Envoy holds >300s => the cut is gateway-only. NOT a bug — a behavioral difference /
+  Gateway API requirement.
+- FIX (staged on osac-ext/osac-int; apply+revalidate pending): set ALL gRPC rules
+  request:0s (Watch/Connect/unary), keep REST 300s. Unary relies on client deadlines.
+- Envoy A/B RESULT (confirmed): quiet Watch straight through the idle old Envoy pod held 360s (rc=124, wrapper-killed=survived) vs gateway cut at 300s => gateway-only regression, confirmed.
+
+- D5 CLOSED (2026-11-17): STOCK grpc-server (heartbeat reverted) + route fix (all gRPC request:0s) => a truly quiet Watch (0 msgs, no keepalive) survived 400s via the gateway (rc=124 wrapper-killed). Proves route fix alone is complete, NO idle timeout, NO fulfillment-service code change. D5 fix = one ingress-config change.
+
+ISSUE-2 (OPEN, HIGH) — console gRPC ConsoleProxy/Connect MISROUTED 2026-11-17:
+- grpcurl osac.public.v1.ConsoleProxy/Connect via gateway -> Code: Unimplemented.
+- Access log: POST /osac.public.v1.ConsoleProxy/Connect ... outbound|8000||fulfillment-grpc-server.osac.svc.cluster.local ... osac.osac-ext.5
+  => matched the broad unary rule (osac-ext.5 -> grpc-server) instead of rule 4 (-> console-proxy); grpc-server does not implement ConsoleProxy.
+- Same R-1 precedence issue as the Watch timeout, but changes the BACKEND -> the uniform-timeout fix does NOT resolve it. WS console path (Exact match) is fine (426).
+- Fix needs a gRPC-routing redesign (GRPCRoute / non-overlapping paths / consolidation). Cluster change => needs operator ! authority.

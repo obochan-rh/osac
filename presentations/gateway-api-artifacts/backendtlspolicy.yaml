@@ -1,0 +1,26 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata: { name: btls-grpc-server, namespace: osac, labels: { osac.io/gw-poc: "true" } }
+spec:
+  targetRefs: [ { group: "", kind: Service, name: fulfillment-grpc-server } ]
+  validation:
+    caCertificateRefs: [ { group: "", kind: ConfigMap, name: osac-backend-ca } ]
+    hostname: fulfillment-grpc-server.osac.svc.cluster.local
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata: { name: btls-rest-gateway, namespace: osac, labels: { osac.io/gw-poc: "true" } }
+spec:
+  targetRefs: [ { group: "", kind: Service, name: fulfillment-rest-gateway } ]
+  validation:
+    caCertificateRefs: [ { group: "", kind: ConfigMap, name: osac-backend-ca } ]
+    hostname: fulfillment-rest-gateway.osac.svc.cluster.local
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata: { name: btls-console-proxy, namespace: osac, labels: { osac.io/gw-poc: "true" } }
+spec:
+  targetRefs: [ { group: "", kind: Service, name: fulfillment-console-proxy } ]
+  validation:
+    caCertificateRefs: [ { group: "", kind: ConfigMap, name: osac-backend-ca } ]
+    hostname: fulfillment-console-proxy.osac.svc.cluster.local

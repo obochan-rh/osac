@@ -1,0 +1,75 @@
+apiVersion: v1
+items:
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    annotations:
+      meta.helm.sh/release-name: osac
+      meta.helm.sh/release-namespace: osac
+    creationTimestamp: "2026-11-17T08:43:50Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/managed-by: Helm
+    name: fulfillment-api
+    namespace: osac
+    resourceVersion: "52008"
+    uid: e2835ed7-d37e-4d78-ad4b-85b1cfc093e7
+  spec:
+    host: fulfillment-api-osac.apps.test-infra-cluster-dev.redhat.com
+    port:
+      targetPort: external-api
+    tls:
+      termination: passthrough
+    to:
+      kind: Service
+      name: fulfillment-api
+      weight: 100
+    wildcardPolicy: None
+  status:
+    ingress:
+    - conditions:
+      - lastTransitionTime: "2026-11-17T08:43:50Z"
+        status: "True"
+        type: Admitted
+      host: fulfillment-api-osac.apps.test-infra-cluster-dev.redhat.com
+      routerCanonicalHostname: router-default.apps.test-infra-cluster-dev.redhat.com
+      routerName: default
+      wildcardPolicy: None
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    annotations:
+      meta.helm.sh/release-name: osac
+      meta.helm.sh/release-namespace: osac
+    creationTimestamp: "2026-11-17T08:43:50Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/managed-by: Helm
+    name: fulfillment-internal-api
+    namespace: osac
+    resourceVersion: "51996"
+    uid: d422500b-eff6-43dd-854c-3c23934f583d
+  spec:
+    host: fulfillment-internal-api-osac.apps.test-infra-cluster-dev.redhat.com
+    port:
+      targetPort: internal-api
+    tls:
+      termination: passthrough
+    to:
+      kind: Service
+      name: fulfillment-internal-api
+      weight: 100
+    wildcardPolicy: None
+  status:
+    ingress:
+    - conditions:
+      - lastTransitionTime: "2026-11-17T08:43:50Z"
+        status: "True"
+        type: Admitted
+      host: fulfillment-internal-api-osac.apps.test-infra-cluster-dev.redhat.com
+      routerCanonicalHostname: router-default.apps.test-infra-cluster-dev.redhat.com
+      routerName: default
+      wildcardPolicy: None
+kind: List
+metadata:
+  resourceVersion: ""

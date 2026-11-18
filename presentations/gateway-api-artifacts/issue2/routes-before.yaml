@@ -1,0 +1,298 @@
+apiVersion: v1
+items:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"gateway.networking.k8s.io/v1","kind":"HTTPRoute","metadata":{"annotations":{},"labels":{"osac.io/gw-poc":"true"},"name":"osac-ext","namespace":"osac"},"spec":{"hostnames":["fulfillment-api-osac.apps.test-infra-cluster-dev.redhat.com","fulfillment-api"],"parentRefs":[{"name":"osac-gateway","namespace":"openshift-ingress","sectionName":"external"},{"name":"osac-gateway","namespace":"openshift-ingress","sectionName":"ext-svc"}],"rules":[{"backendRefs":[{"name":"fulfillment-console-proxy","port":8090}],"matches":[{"path":{"type":"Exact","value":"/api/fulfillment/v1/console_sessions/connect"}}],"timeouts":{"request":"0s"}},{"backendRefs":[{"name":"fulfillment-rest-gateway","port":8000}],"matches":[{"path":{"type":"Exact","value":"/.well-known/jwks.json"}}],"timeouts":{"request":"10s"}},{"backendRefs":[{"name":"fulfillment-rest-gateway","port":8000}],"matches":[{"path":{"type":"PathPrefix","value":"/api/fulfillment"}},{"path":{"type":"PathPrefix","value":"/api/events"}}],"timeouts":{"backendRequest":"300s","request":"300s"}},{"backendRefs":[{"name":"fulfillment-grpc-server","port":8000}],"matches":[{"path":{"type":"RegularExpression","value":"/osac\\.public\\..*/Watch"}}],"timeouts":{"request":"0s"}},{"backendRefs":[{"name":"fulfillment-console-proxy","port":8000}],"matches":[{"path":{"type":"RegularExpression","value":"/osac\\.public\\..*ConsoleProxy/Connect"}}],"timeouts":{"request":"0s"}},{"backendRefs":[{"name":"fulfillment-grpc-server","port":8000}],"matches":[{"path":{"type":"RegularExpression","value":"/(osac\\.public\\.|grpc\\.(reflection|health)\\.).*"}}],"timeouts":{"request":"0s"}}]}}
+    creationTimestamp: "2026-11-17T11:59:36Z"
+    generation: 3
+    labels:
+      osac.io/gw-poc: "true"
+    name: osac-ext
+    namespace: osac
+    resourceVersion: "618500"
+    uid: 374b55b9-6318-456a-a76f-992375bc7f10
+  spec:
+    hostnames:
+    - fulfillment-api-osac.apps.test-infra-cluster-dev.redhat.com
+    - fulfillment-api
+    parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: osac-gateway
+      namespace: openshift-ingress
+      sectionName: external
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: osac-gateway
+      namespace: openshift-ingress
+      sectionName: ext-svc
+    rules:
+    - backendRefs:
+      - group: ""
+        kind: Service
+        name: fulfillment-console-proxy
+        port: 8090
+        weight: 1
+      matches:
+      - path:
+          type: Exact
+          value: /api/fulfillment/v1/console_sessions/connect
+      timeouts:
+        request: 0s
+    - backendRefs:
+      - group: ""
+        kind: Service
+        name: fulfillment-rest-gateway
+        port: 8000
+        weight: 1
+      matches:
+      - path:
+          type: Exact
+          value: /.well-known/jwks.json
+      timeouts:
+        request: 10s
+    - backendRefs:
+      - group: ""
+        kind: Service
+        name: fulfillment-rest-gateway
+        port: 8000
+        weight: 1
+      matches:
+      - path:
+          type: PathPrefix
+          value: /api/fulfillment
+      - path:
+          type: PathPrefix
+          value: /api/events
+      timeouts:
+        backendRequest: 300s
+        request: 300s
+    - backendRefs:
+      - group: ""
+        kind: Service
+        name: fulfillment-grpc-server
+        port: 8000
+        weight: 1
+      matches:
+      - path:
+          type: RegularExpression
+          value: /osac\.public\..*/Watch
+      timeouts:
+        request: 0s
+    - backendRefs:
+      - group: ""
+        kind: Service
+        name: fulfillment-console-proxy
+        port: 8000
+        weight: 1
+      matches:
+      - path:
+          type: RegularExpression
+          value: /osac\.public\..*ConsoleProxy/Connect
+      timeouts:
+        request: 0s
+    - backendRefs:
+      - group: ""
+        kind: Service
+        name: fulfillment-grpc-server
+        port: 8000
+        weight: 1
+      matches:
+      - path:
+          type: RegularExpression
+          value: /(osac\.public\.|grpc\.(reflection|health)\.).*
+      timeouts:
+        request: 0s
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: "2026-11-17T11:59:36Z"
+        message: Route was valid
+        observedGeneration: 3
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: "2026-11-17T11:59:36Z"
+        message: All references resolved
+        observedGeneration: 3
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: openshift.io/gateway-controller/v1
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: osac-gateway
+        namespace: openshift-ingress
+        sectionName: external
+    - conditions:
+      - lastTransitionTime: "2026-11-17T12:45:27Z"
+        message: Route was valid
+        observedGeneration: 3
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: "2026-11-17T12:45:27Z"
+        message: All references resolved
+        observedGeneration: 3
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: openshift.io/gateway-controller/v1
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: osac-gateway
+        namespace: openshift-ingress
+        sectionName: ext-svc
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"gateway.networking.k8s.io/v1","kind":"HTTPRoute","metadata":{"annotations":{},"labels":{"osac.io/gw-poc":"true"},"name":"osac-int","namespace":"osac"},"spec":{"hostnames":["fulfillment-internal-api-osac.apps.test-infra-cluster-dev.redhat.com","fulfillment-internal-api"],"parentRefs":[{"name":"osac-gateway","namespace":"openshift-ingress","sectionName":"internal"},{"name":"osac-gateway","namespace":"openshift-ingress","sectionName":"int-svc"}],"rules":[{"backendRefs":[{"name":"fulfillment-console-proxy","port":8090}],"matches":[{"path":{"type":"Exact","value":"/api/fulfillment/v1/console_sessions/connect"}}],"timeouts":{"request":"0s"}},{"backendRefs":[{"name":"fulfillment-rest-gateway","port":8000}],"matches":[{"path":{"type":"Exact","value":"/.well-known/jwks.json"}}],"timeouts":{"request":"10s"}},{"backendRefs":[{"name":"fulfillment-rest-gateway","port":8000}],"matches":[{"path":{"type":"PathPrefix","value":"/api"}}],"timeouts":{"backendRequest":"300s","request":"300s"}},{"backendRefs":[{"name":"fulfillment-grpc-server","port":8000}],"matches":[{"path":{"type":"RegularExpression","value":"^.*/Watch$"}}],"timeouts":{"request":"0s"}},{"backendRefs":[{"name":"fulfillment-console-proxy","port":8000}],"matches":[{"path":{"type":"RegularExpression","value":"/osac\\.public\\..*ConsoleProxy/Connect"}}],"timeouts":{"request":"0s"}},{"backendRefs":[{"name":"fulfillment-grpc-server","port":8000}],"matches":[{"path":{"type":"PathPrefix","value":"/"}}],"timeouts":{"request":"0s"}}]}}
+    creationTimestamp: "2026-11-17T11:59:36Z"
+    generation: 3
+    labels:
+      osac.io/gw-poc: "true"
+    name: osac-int
+    namespace: osac
+    resourceVersion: "618503"
+    uid: 7a4d3bb4-e611-4b3c-909e-c92bbee1a27f
+  spec:
+    hostnames:
+    - fulfillment-internal-api-osac.apps.test-infra-cluster-dev.redhat.com
+    - fulfillment-internal-api
+    parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: osac-gateway
+      namespace: openshift-ingress
+      sectionName: internal
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: osac-gateway
+      namespace: openshift-ingress
+      sectionName: int-svc
+    rules:
+    - backendRefs:
+      - group: ""
+        kind: Service
+        name: fulfillment-console-proxy
+        port: 8090
+        weight: 1
+      matches:
+      - path:
+          type: Exact
+          value: /api/fulfillment/v1/console_sessions/connect
+      timeouts:
+        request: 0s
+    - backendRefs:
+      - group: ""
+        kind: Service
+        name: fulfillment-rest-gateway
+        port: 8000
+        weight: 1
+      matches:
+      - path:
+          type: Exact
+          value: /.well-known/jwks.json
+      timeouts:
+        request: 10s
+    - backendRefs:
+      - group: ""
+        kind: Service
+        name: fulfillment-rest-gateway
+        port: 8000
+        weight: 1
+      matches:
+      - path:
+          type: PathPrefix
+          value: /api
+      timeouts:
+        backendRequest: 300s
+        request: 300s
+    - backendRefs:
+      - group: ""
+        kind: Service
+        name: fulfillment-grpc-server
+        port: 8000
+        weight: 1
+      matches:
+      - path:
+          type: RegularExpression
+          value: ^.*/Watch$
+      timeouts:
+        request: 0s
+    - backendRefs:
+      - group: ""
+        kind: Service
+        name: fulfillment-console-proxy
+        port: 8000
+        weight: 1
+      matches:
+      - path:
+          type: RegularExpression
+          value: /osac\.public\..*ConsoleProxy/Connect
+      timeouts:
+        request: 0s
+    - backendRefs:
+      - group: ""
+        kind: Service
+        name: fulfillment-grpc-server
+        port: 8000
+        weight: 1
+      matches:
+      - path:
+          type: PathPrefix
+          value: /
+      timeouts:
+        request: 0s
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: "2026-11-17T11:59:36Z"
+        message: Route was valid
+        observedGeneration: 3
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: "2026-11-17T11:59:36Z"
+        message: All references resolved
+        observedGeneration: 3
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: openshift.io/gateway-controller/v1
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: osac-gateway
+        namespace: openshift-ingress
+        sectionName: internal
+    - conditions:
+      - lastTransitionTime: "2026-11-17T12:45:27Z"
+        message: Route was valid
+        observedGeneration: 3
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: "2026-11-17T12:45:27Z"
+        message: All references resolved
+        observedGeneration: 3
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: openshift.io/gateway-controller/v1
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: osac-gateway
+        namespace: openshift-ingress
+        sectionName: int-svc
+kind: List
+metadata:
+  resourceVersion: ""

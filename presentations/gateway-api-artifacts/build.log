@@ -1,0 +1,81 @@
+BUILD START 13:17:37
+[1/5] STEP 1/22: FROM registry.access.redhat.com/ubi10/go-toolset:1.26.10-1793622842 AS builder
+Trying to pull registry.access.redhat.com/ubi10/go-toolset:1.26.10-1793622842...
+Getting image source signatures
+Checking if image destination supports signatures
+Copying blob sha256:59639377026fc07e0e4b0addbe52fb0fd32ddb2f7251515daf8f70190435fa72
+Copying blob sha256:7a109e94866ee2e45f0efaa7dc82b5fd18eef6cbfc0167e3c455944f368d27b5
+Copying blob sha256:35f6f58ea76218f1dd3d0c165a7e3587050d78478fa70d40a729e1663f03f41c
+Copying blob sha256:9b23645540088e8be13499194fddb7d9af55c7563e05651682595f42dc7e28f5
+Copying config sha256:6c16a78dcdf2ce649c582fc9aecb225090a67b833e7527de384c311aa7045c99
+Writing manifest to image destination
+Storing signatures
+[1/5] STEP 2/22: ARG DEBUG=false
+--> f62bb4549353
+[1/5] STEP 3/22: WORKDIR /opt/app-root/src
+--> 3dc8831537fa
+[1/5] STEP 4/22: COPY --chown=1001:1001 go.work ./
+--> 0cf6509fb1bc
+[1/5] STEP 5/22: COPY --chown=1001:1001 proto/go.mod proto/go.sum proto/
+--> 6dca0146fe8e
+[1/5] STEP 6/22: COPY --chown=1001:1001 fulfillment-service/go.mod fulfillment-service/go.sum fulfillment-service/
+--> 5130ec3f43a1
+[1/5] STEP 7/22: COPY --chown=1001:1001 bare-metal-fulfillment-operator/go.mod bare-metal-fulfillment-operator/go.sum bare-metal-fulfillment-operator/
+--> f796162d0849
+[1/5] STEP 8/22: COPY --chown=1001:1001 osac-operator/go.mod osac-operator/go.sum osac-operator/
+--> f97dbec14855
+[1/5] STEP 9/22: COPY --chown=1001:1001 osac-operator/api/go.mod osac-operator/api/go.sum osac-operator/api/
+--> bcdf15271e7a
+[1/5] STEP 10/22: COPY --chown=1001:1001 osac-csi-driver/go.mod osac-csi-driver/go.sum osac-csi-driver/
+--> d9b843527708
+[1/5] STEP 11/22: COPY --chown=1001:1001 osac-metering/schema/go.mod osac-metering/schema/go.sum osac-metering/schema/
+--> 378d9199fb0d
+[1/5] STEP 12/22: COPY --chown=1001:1001 osac-metering/metering-service/go.mod osac-metering/metering-service/go.sum osac-metering/metering-service/
+--> edb8197ea18d
+[1/5] STEP 13/22: COPY --chown=1001:1001 osac-metering/adapters/go.mod osac-metering/adapters/go.sum osac-metering/adapters/
+--> 46b4abbf9e7b
+[1/5] STEP 14/22: COPY --chown=1001:1001 osac-ui/proxy/go.mod osac-ui/proxy/go.sum osac-ui/proxy/
+--> 121ac57a2d50
+[1/5] STEP 15/22: RUN --mount=type=cache,id=osac-go-pkg,target=/opt/app-root/src/go/pkg,uid=1001,gid=0   set -e;   cd fulfillment-service;   [ -f /cachi2/cachi2.env ] && . /cachi2/cachi2.env;   GODEBUG=http2client=0 go mod download
+--> 237001ba3189
+[1/5] STEP 16/22: ARG VERSION=""
+--> 47a881b97435
+[1/5] STEP 17/22: COPY --chown=1001:1001 proto/ proto/
+--> a17a694fd5e6
+[1/5] STEP 18/22: COPY --chown=1001:1001 fulfillment-service/ fulfillment-service/
+--> efeb14a83a12
+[1/5] STEP 19/22: COPY --chown=1001:1001 bare-metal-fulfillment-operator/ bare-metal-fulfillment-operator/
+--> 189d9e90b92d
+[1/5] STEP 20/22: COPY --chown=1001:1001 osac-operator/api/ osac-operator/api/
+--> e77ea79e9895
+[1/5] STEP 21/22: WORKDIR /opt/app-root/src/fulfillment-service
+--> 4d5e9826bed8
+[1/5] STEP 22/22: RUN --mount=type=cache,id=osac-go-pkg,target=/opt/app-root/src/go/pkg,uid=1001,gid=0     --mount=type=cache,id=osac-go-build,target=/opt/app-root/src/.cache/go-build,uid=1001,gid=0   set -e;   [ -f /cachi2/cachi2.env ] && . /cachi2/cachi2.env;   version="${VERSION}";   if [[ -z "${version}" ]]; then     version=$(git describe --tags --always 2>/dev/null || echo "dev");   fi;   gcflags="";   ldflags="-X github.com/osac-project/osac/fulfillment-service/internal/version.id=${version}";   if [[ "${DEBUG}" == "true" ]]; then     gcflags="all=-N -l";   fi;   go build -gcflags="${gcflags}" -ldflags="${ldflags}" ./cmd/fulfillment-service;   go build -gcflags="${gcflags}" -ldflags="${ldflags}" ./cmd/osac
+--> 5460b5c5558c
+[3/5] STEP 1/4: FROM registry.access.redhat.com/ubi10-minimal:10.2-1793642335 AS runtime-base
+Trying to pull registry.access.redhat.com/ubi10-minimal:10.2-1793642335...
+Getting image source signatures
+Checking if image destination supports signatures
+Copying blob sha256:41b5e888b5cdf3bececf953aef8cd8fe7aa0906db6e2fc8c7d43e8c2df221312
+Copying config sha256:9a4e7be07b286c0bceb8317278653c6fd4e24cc02fd62a930ee00dde4729a520
+Writing manifest to image destination
+Storing signatures
+[3/5] STEP 2/4: COPY --from=builder /opt/app-root/src/fulfillment-service/fulfillment-service /usr/local/bin
+--> be51f85ee250
+[3/5] STEP 3/4: COPY --from=builder /opt/app-root/src/fulfillment-service/osac /usr/local/bin
+--> 302f384c175c
+[3/5] STEP 4/4: USER 1001
+--> 26771ba16a56
+[5/5] STEP 1/5: FROM 26771ba16a5607b979814d9419298ab5992bbccf56f1b283d360f72a15c656bd AS runtime
+[5/5] STEP 2/5: ARG VERSION=dev
+--> 0cbeb894fb21
+[5/5] STEP 3/5: LABEL name="cloud-extensions/fulfillment-service-rhel10"
+--> bb4a83ab6edb
+[5/5] STEP 4/5: LABEL cpe="cpe:/a:redhat:cloud_extensions:0.1::el10"
+--> fe71723b753b
+[5/5] STEP 5/5: LABEL org.opencontainers.image.version="${VERSION}"
+[5/5] COMMIT localhost/fulfillment-service:gw-hb
+--> a1ea8cf70b7e
+Successfully tagged localhost/fulfillment-service:gw-hb
+a1ea8cf70b7ee6c26d3ade586f2e0ea450d97bbdbe0f04526dae0d4c01d98807
+BUILD_RC=0 END 13:19:43

@@ -1,0 +1,18 @@
+GROUP:      gateway.networking.k8s.io
+KIND:       HTTPRoute
+VERSION:    v1
+
+FIELD: type <string>
+ENUM:
+    Exact
+    PathPrefix
+    RegularExpression
+
+DESCRIPTION:
+    Type specifies how to match against the path Value.
+    
+    Support: Core (Exact, PathPrefix)
+    
+    Support: Implementation-specific (RegularExpression)
+    
+

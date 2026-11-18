@@ -1,0 +1,7 @@
+NAME                 SHORTNAMES   APIVERSION                          NAMESPACED   KIND
+backendtlspolicies   btlspolicy   gateway.networking.k8s.io/v1        true         BackendTLSPolicy
+gatewayclasses       gc           gateway.networking.k8s.io/v1        false        GatewayClass
+gateways             gtw          gateway.networking.k8s.io/v1        true         Gateway
+grpcroutes                        gateway.networking.k8s.io/v1        true         GRPCRoute
+httproutes                        gateway.networking.k8s.io/v1        true         HTTPRoute
+referencegrants      refgrant     gateway.networking.k8s.io/v1beta1   true         ReferenceGrant

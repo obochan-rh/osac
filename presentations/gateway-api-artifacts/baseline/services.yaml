@@ -1,0 +1,69 @@
+apiVersion: v1
+items:
+- apiVersion: v1
+  kind: Service
+  metadata:
+    annotations:
+      meta.helm.sh/release-name: osac
+      meta.helm.sh/release-namespace: osac
+    creationTimestamp: "2026-11-17T08:43:50Z"
+    labels:
+      app.kubernetes.io/managed-by: Helm
+    name: fulfillment-api
+    namespace: osac
+    resourceVersion: "51772"
+    uid: 2755ad97-500d-4023-adb2-4e35c65b276b
+  spec:
+    clusterIP: 10.128.79.146
+    clusterIPs:
+    - 10.128.79.146
+    internalTrafficPolicy: Cluster
+    ipFamilies:
+    - IPv4
+    ipFamilyPolicy: SingleStack
+    ports:
+    - name: external-api
+      port: 8000
+      protocol: TCP
+      targetPort: external-api
+    selector:
+      app: fulfillment-ingress-proxy
+    sessionAffinity: None
+    type: ClusterIP
+  status:
+    loadBalancer: {}
+- apiVersion: v1
+  kind: Service
+  metadata:
+    annotations:
+      meta.helm.sh/release-name: osac
+      meta.helm.sh/release-namespace: osac
+    creationTimestamp: "2026-11-17T08:43:50Z"
+    labels:
+      app.kubernetes.io/managed-by: Helm
+    name: fulfillment-internal-api
+    namespace: osac
+    resourceVersion: "51782"
+    uid: 8662c586-2381-420f-9d5a-4fccb0a52946
+  spec:
+    clusterIP: 10.130.105.140
+    clusterIPs:
+    - 10.130.105.140
+    internalTrafficPolicy: Cluster
+    ipFamilies:
+    - IPv4
+    ipFamilyPolicy: SingleStack
+    ports:
+    - name: internal-api
+      port: 8001
+      protocol: TCP
+      targetPort: internal-api
+    selector:
+      app: fulfillment-ingress-proxy
+    sessionAffinity: None
+    type: ClusterIP
+  status:
+    loadBalancer: {}
+kind: List
+metadata:
+  resourceVersion: ""

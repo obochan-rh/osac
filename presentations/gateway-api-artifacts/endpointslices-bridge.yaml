@@ -1,0 +1,19 @@
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: fulfillment-api-gw-poc
+  namespace: osac
+  labels: { kubernetes.io/service-name: fulfillment-api, osac.io/gw-poc: "true" }
+addressType: IPv4
+ports: [ { name: external-api, port: 443, protocol: TCP } ]
+endpoints: [ { addresses: [ "172.30.26.235" ], conditions: { ready: true } } ]
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: fulfillment-internal-api-gw-poc
+  namespace: osac
+  labels: { kubernetes.io/service-name: fulfillment-internal-api, osac.io/gw-poc: "true" }
+addressType: IPv4
+ports: [ { name: internal-api, port: 443, protocol: TCP } ]
+endpoints: [ { addresses: [ "172.30.26.235" ], conditions: { ready: true } } ]

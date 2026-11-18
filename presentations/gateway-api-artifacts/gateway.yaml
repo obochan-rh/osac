@@ -1,0 +1,30 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata: { name: osac-gateway, namespace: openshift-ingress, labels: { osac.io/gw-poc: "true" } }
+spec:
+  gatewayClassName: openshift-default
+  listeners:
+  - name: external
+    protocol: HTTPS
+    port: 443
+    hostname: fulfillment-api-osac.apps.test-infra-cluster-dev.redhat.com
+    tls: { mode: Terminate, certificateRefs: [ { kind: Secret, name: fulfillment-api-tls } ] }
+    allowedRoutes: { namespaces: { from: Selector, selector: { matchLabels: { kubernetes.io/metadata.name: osac } } }, kinds: [ { kind: HTTPRoute } ] }
+  - name: internal
+    protocol: HTTPS
+    port: 443
+    hostname: fulfillment-internal-api-osac.apps.test-infra-cluster-dev.redhat.com
+    tls: { mode: Terminate, certificateRefs: [ { kind: Secret, name: fulfillment-api-tls } ] }
+    allowedRoutes: { namespaces: { from: Selector, selector: { matchLabels: { kubernetes.io/metadata.name: osac } } }, kinds: [ { kind: HTTPRoute } ] }
+  - name: ext-svc
+    protocol: HTTPS
+    port: 443
+    hostname: fulfillment-api
+    tls: { mode: Terminate, certificateRefs: [ { kind: Secret, name: fulfillment-api-tls } ] }
+    allowedRoutes: { namespaces: { from: Selector, selector: { matchLabels: { kubernetes.io/metadata.name: osac } } }, kinds: [ { kind: HTTPRoute } ] }
+  - name: int-svc
+    protocol: HTTPS
+    port: 443
+    hostname: fulfillment-internal-api
+    tls: { mode: Terminate, certificateRefs: [ { kind: Secret, name: fulfillment-api-tls } ] }
+    allowedRoutes: { namespaces: { from: Selector, selector: { matchLabels: { kubernetes.io/metadata.name: osac } } }, kinds: [ { kind: HTTPRoute } ] }

@@ -1,0 +1,12 @@
+=== ingress-separation + API battery vs gateway (21:09:21) ===
+  PASS: public gRPC via external
+  PASS: public gRPC via internal
+  PASS: private gRPC DENIED via external
+  PASS: private gRPC served via internal
+  PASS: public REST via external (200)
+  PASS: public REST via internal (200)
+  PASS: bad-token rejected (401)
+  PASS: console gRPC routed ext (ERROR:   Code: Unimplemented )
+  PASS: console WS routed ext (426 Upgrade)
+  PASS: ALPN negotiates h2
+=== RESULT: 10 passed, 0 failed ===

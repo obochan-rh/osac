@@ -1,0 +1,67 @@
+=== SOAK START Tue Nov 17 21:14:20 UTC 2026 dur=3300s (continuous Watch pid=430092) ===
+cyc1 21:14:20 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+cyc2 21:19:23 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=3 watch=UP
+cyc3 21:24:26 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+cyc4 21:29:28 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+cyc5 21:34:31 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+cyc6 21:39:33 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+cyc7 21:44:36 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+cyc8 21:49:39 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=3 watch=UP
+cyc9 21:54:41 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+cyc10 21:59:44 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+cyc11 22:04:47 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+=== SOAK END Tue Nov 17 22:09:49 UTC 2026 ===
+=== SOAK START Tue Nov 17 22:11:16 UTC 2026 dur=3300s (continuous Watch pid=432574) ===
+cyc1 22:11:16 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+cyc2 22:16:18 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=3 watch=UP
+cyc3 22:21:21 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=3 watch=UP
+cyc4 22:26:24 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+cyc5 22:31:26 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+cyc6 22:36:29 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+cyc7 22:41:32 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+cyc8 22:46:34 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=3 watch=UP
+cyc9 22:51:37 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=3 watch=UP
+cyc10 22:56:40 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+cyc11 23:01:42 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+=== SOAK END Tue Nov 17 23:06:45 UTC 2026 ===
+=== SOAK START Tue Nov 17 23:08:34 UTC 2026 dur=3300s (continuous Watch pid=435381) ===
+cyc1 23:08:34 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+cyc2 23:13:36 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+cyc3 23:18:39 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=3 watch=UP
+cyc4 23:23:42 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+cyc5 23:28:44 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+cyc6 23:33:47 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+cyc7 23:38:49 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+cyc8 23:43:52 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+cyc9 23:48:55 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=3 watch=UP
+cyc10 23:53:58 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+cyc11 23:59:00 REST=200/200 nonrun=3 restarts=3 var=31% gw5xx6m=0 watch=UP
+=== SOAK END Wed Nov 18 00:04:03 UTC 2026 ===
+=== MONITOR START Wed Nov 18 00:06:21 UTC 2026 dur=16200s (10-min samples, 30s watch probe) ===
+mon1 00:06:21 REST=200/200 watch=OK30 nonrun=3 restarts=3 var=31% gw5xx11m=0 nonCaaS5xx=1
+mon2 00:16:56 REST=200/200 watch=OK30 nonrun=3 restarts=3 var=31% gw5xx11m=3 nonCaaS5xx=0
+mon3 00:27:30 REST=200/200 watch=OK30 nonrun=3 restarts=3 var=31% gw5xx11m=0 nonCaaS5xx=1
+mon4 00:38:05 REST=200/200 watch=OK30 nonrun=3 restarts=3 var=31% gw5xx11m=0 nonCaaS5xx=1
+mon5 00:48:40 REST=200/200 watch=OK30 nonrun=3 restarts=3 var=31% gw5xx11m=3 nonCaaS5xx=0
+mon6 00:59:14 REST=200/200 watch=OK30 nonrun=3 restarts=3 var=31% gw5xx11m=0 nonCaaS5xx=1
+mon7 01:09:49 REST=200/200 watch=OK30 nonrun=3 restarts=3 var=31% gw5xx11m=0 nonCaaS5xx=1
+mon8 01:20:24 REST=200/200 watch=OK30 nonrun=3 restarts=3 var=31% gw5xx11m=3 nonCaaS5xx=0
+mon9 01:30:58 REST=200/200 watch=OK30 nonrun=3 restarts=3 var=31% gw5xx11m=0 nonCaaS5xx=1
+mon10 01:41:33 REST=200/200 watch=OK30 nonrun=3 restarts=3 var=31% gw5xx11m=0 nonCaaS5xx=1
+mon11 01:52:08 REST=200/200 watch=OK30 nonrun=3 restarts=3 var=32% gw5xx11m=3 nonCaaS5xx=0
+mon12 02:02:43 REST=200/200 watch=OK30 nonrun=3 restarts=3 var=31% gw5xx11m=0 nonCaaS5xx=1
+mon13 02:13:17 REST=200/200 watch=OK30 nonrun=3 restarts=5 var=31% gw5xx11m=0 nonCaaS5xx=1
+mon14 02:23:52 REST=200/200 watch=OK30 nonrun=3 restarts=5 var=33% gw5xx11m=0 nonCaaS5xx=1
+mon15 02:34:27 REST=200/200 watch=OK30 nonrun=3 restarts=5 var=33% gw5xx11m=0 nonCaaS5xx=1
+mon16 02:45:02 REST=200/200 watch=OK30 nonrun=3 restarts=5 var=33% gw5xx11m=0 nonCaaS5xx=1
+mon17 02:55:36 REST=200/200 watch=OK30 nonrun=3 restarts=5 var=33% gw5xx11m=0 nonCaaS5xx=1
+mon18 03:06:11 REST=200/200 watch=OK30 nonrun=3 restarts=5 var=33% gw5xx11m=0 nonCaaS5xx=1
+mon19 03:16:46 REST=200/200 watch=OK30 nonrun=3 restarts=7 var=33% gw5xx11m=0 nonCaaS5xx=1
+mon20 03:27:21 REST=200/200 watch=OK30 nonrun=3 restarts=8 var=33% gw5xx11m=0 nonCaaS5xx=1
+mon21 03:37:55 REST=200/200 watch=OK30 nonrun=3 restarts=8 var=33% gw5xx11m=0 nonCaaS5xx=1
+mon22 03:48:30 REST=200/200 watch=OK30 nonrun=3 restarts=8 var=33% gw5xx11m=0 nonCaaS5xx=1
+mon23 03:59:05 REST=200/200 watch=OK30 nonrun=3 restarts=8 var=33% gw5xx11m=0 nonCaaS5xx=1
+mon24 04:09:39 REST=200/200 watch=OK30 nonrun=3 restarts=8 var=33% gw5xx11m=0 nonCaaS5xx=1
+mon25 04:20:14 REST=200/200 watch=OK30 nonrun=3 restarts=8 var=33% gw5xx11m=0 nonCaaS5xx=1
+mon26 04:30:49 REST=200/200 watch=OK30 nonrun=3 restarts=8 var=33% gw5xx11m=0 nonCaaS5xx=1
+=== MONITOR END Wed Nov 18 04:41:24 UTC 2026 ===
